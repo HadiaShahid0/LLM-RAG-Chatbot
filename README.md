@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 🤖 AI Chatbot
 
 A full-stack AI chatbot built with **React, Vite, Node.js, Express, MySQL, Sequelize, and Google Gemini**. It supports conversational AI, persistent chat history, conversation summaries, document and image uploads, LLM tool calling, source citations, and Retrieval-Augmented Generation (RAG) for retrieving information from uploaded PDF content.

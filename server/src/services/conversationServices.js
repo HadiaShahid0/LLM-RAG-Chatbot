@@ -1,5 +1,5 @@
 import { Message, Conversation } from "../models/index.js";
-import { generateGeminiResponse } from "./geminiServices.js";
+import { model } from "../config/langchain.js";
 import { Op } from "sequelize";
 
 export const createConversationService = async (userId, title) => {
@@ -43,9 +43,7 @@ export const updateConversationSummaryService = async (conversationId) => {
   if (!conversation) {
     throw new Error("Conversation not found");
   }
-  const whereCondition = {
-    conversationId,
-  };
+  const whereCondition = { conversationId };
 
   if (conversation.lastSummarizedMessageId) {
     whereCondition.id = {
@@ -58,9 +56,7 @@ export const updateConversationSummaryService = async (conversationId) => {
     order: [["createdAt", "ASC"]],
   });
 
-  if (!messages.length) {
-    return conversation.summary || "";
-  }
+  if (!messages.length) return conversation.summary || "";
 
   const conversationText = messages
     .map((message) => {
@@ -93,25 +89,24 @@ Keep:
 Do not invent information. keep the wording simple and summary short.
 Return only the updated summary, without headings or additional explanations.
 `;
-  const summaryResponse = await generateGeminiResponse([
-    {
-      role: "user",
-      parts: [
-        {
-          text: prompt,
-        },
-      ],
-    },
-  ]);
+  const summaryResponse = await model.invoke(prompt);
+
+  const summaryText =
+    typeof summaryResponse.content === "string"
+      ? summaryResponse.content
+      : summaryResponse.content
+          .filter((block) => block.type === "text")
+          .map((block) => block.text)
+          .join("");
 
   const lastMessage = messages[messages.length - 1];
 
   await conversation.update({
-    summary: summaryResponse,
+    summary: summaryText,
     lastSummarizedMessageId: lastMessage.id,
   });
 
-  return summaryResponse;
+  return summaryText;
 };
 
 export const getConversationContextService = async (conversationId) => {

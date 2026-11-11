@@ -16,7 +16,7 @@ export const retrieveRelevantChunksService = async ({ question, topK = 5 }) => {
     },
   });
 
-  const ids=results.ids?.[0]||[];
+  const ids = results.ids?.[0] || [];
   const documents = results.documents?.[0] || [];
   const metadatas = results.metadatas?.[0] || [];
   const distances = results.distances?.[0] || [];
@@ -27,6 +27,18 @@ export const retrieveRelevantChunksService = async ({ question, topK = 5 }) => {
     metadata: metadatas[index],
     distance: distances[index],
   }));
+  console.log("\n========== VECTOR SEARCH RESULTS ==========");
+  console.log("Question:", question);
+  console.log("Retrieved chunks:", retrievedChunks.length);
+
+  console.table(
+    retrievedChunks.map((chunk, index) => ({
+      rank: index + 1,
+      id: chunk.id,
+      distance: chunk.distance,
+      fileName: chunk.metadata?.fileName,
+    })),
+  );
 
   return retrievedChunks;
 };
