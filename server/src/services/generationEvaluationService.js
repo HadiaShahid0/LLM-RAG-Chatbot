@@ -1,66 +1,73 @@
-import { GoogleGenAI } from "@google/genai";
+import { SystemMessage, HumanMessage } from "@langchain/core/messages";
 
-import { generateGeminiResponseStream } from "./geminiServices.js";
+import { model } from "../config/langchain.js";
 import { validateAIInputService } from "./guardrailsServices.js";
 
-import { buildDocumentContextService } from "./messageServices.js";
+const MAX_RESPONSE_LENGTH = 4000;
 
-const ai = new GoogleGenAI({
-  apiKey: process.env.GEMINI_API_KEY,
-});
+// Extract text from a LangChain response
+const getResponseText = (content) => {
+  if (typeof content === "string") return content;
 
-const MODEL = process.env.GEMINI_MODEL || "gemini-3.5-flash-lite";
+  if (Array.isArray(content)) {
+    return content
+      .filter((item) => item.type === "text")
+      .map((item) => item.text)
+      .join("");
+  }
 
+  return "";
+};
+
+// Build context from retrieved document chunks
+const buildDocumentContext = (chunks = []) => {
+  if (!chunks.length) return "";
+
+  return chunks
+    .map((chunk, index) => {
+      return `Document Context ${index + 1}:\n${chunk.text}`;
+    })
+    .join("\n\n");
+};
+
+// Generate an answer for RAG evaluation
 export const generateAnswerForEvaluationService = async ({
   question,
   retrievedChunks,
 }) => {
-  const conversationContext = [];
+  const documentContext = buildDocumentContext(retrievedChunks);
 
-  const documentContext = buildDocumentContextService(retrievedChunks);
+  const response = await model.invoke([
+    new SystemMessage(`
+You are an AI assistant answering questions using retrieved document context.
 
-  if (documentContext) {
-    conversationContext.push({
-      role: "user",
-      parts: [
-        {
-          text: documentContext,
-        },
-      ],
-    });
-  }
+Rules:
+- Answer using the provided document context.
+- Do not invent facts or use outside knowledge for document-specific questions.
+- If the answer is not available in the context, clearly state that.
+- Give accurate, simple, and relevant answers.
+`),
 
-  conversationContext.push({
-    role: "user",
-    parts: [
-      {
-        text: question,
-      },
-    ],
-  });
+    new HumanMessage(`
+DOCUMENT CONTEXT:
+${documentContext || "[No context retrieved]"}
 
-  const aiResponse = await generateGeminiResponseStream(conversationContext);
+QUESTION:
+${question}
+`),
+  ]);
 
-  let completeResponse = "";
+  const completeResponse = getResponseText(response.content);
 
-  for await (const chunk of aiResponse) {
-    const chunkText = chunk.text || "";
+  const limitedResponse = completeResponse.slice(
+    0,
+    MAX_RESPONSE_LENGTH,
+  );
 
-    const remainingLength = 4000 - completeResponse.length;
-
-    if (remainingLength <= 0) {
-      break;
-    }
-
-    completeResponse += chunkText.slice(0, remainingLength);
-
-    if (chunkText.length > remainingLength) {
-      break;
-    }
-  }
-  return validateAIInputService(completeResponse);
+  return validateAIInputService(limitedResponse);
 };
 
+// Parse JSON response from the evaluator
 const parseJudgeResponse = (text) => {
   const cleanedText = text
     .trim()
@@ -70,6 +77,7 @@ const parseJudgeResponse = (text) => {
   return JSON.parse(cleanedText);
 };
 
+// Evaluate the generated RAG answer
 export const evaluateGenerationService = async ({
   question,
   expectedAnswer,
@@ -77,11 +85,7 @@ export const evaluateGenerationService = async ({
   retrievedChunks,
   shouldAbstain,
 }) => {
-  const context = retrievedChunks
-    .map((chunk, index) => {
-      return `Context ${index + 1}:\n${chunk.text}`;
-    })
-    .join("\n\n");
+  const context = buildDocumentContext(retrievedChunks);
 
   const prompt = `
 You are an impartial evaluator for a Retrieval-Augmented Generation (RAG) system.
@@ -150,17 +154,23 @@ Return this exact structure:
 }
 `;
 
-  const response = await ai.models.generateContent({
-    model: MODEL,
-    contents: prompt,
-    config: {
-      responseMimeType: "application/json",
-    },
-  });
+  const response = await model.invoke([
+    new SystemMessage(
+      "You are a strict RAG evaluation judge. Return only valid JSON.",
+    ),
+    new HumanMessage(prompt),
+  ]);
 
-  const result = parseJudgeResponse(response.text || "");
+  const result = parseJudgeResponse(
+    getResponseText(response.content),
+  );
 
-  const scoreFields = ["faithfulness", "answerRelevancy", "answerCorrectness"];
+  // Validate evaluation scores
+  const scoreFields = [
+    "faithfulness",
+    "answerRelevancy",
+    "answerCorrectness",
+  ];
 
   for (const field of scoreFields) {
     if (
@@ -173,6 +183,7 @@ Return this exact structure:
     }
   }
 
+  // Validate abstention score
   if (shouldAbstain) {
     if (
       typeof result.abstentionCorrectness !== "number" ||

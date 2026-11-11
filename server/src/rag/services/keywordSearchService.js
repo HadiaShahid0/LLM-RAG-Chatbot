@@ -9,6 +9,8 @@ const prepareText = (text) => {
 export const buildKeywordIndexService = (chunks) => {
   const engine = bm25();
 
+  chunksById.clear()
+  
   engine.defineConfig({
     fldWeights: {
       text: 1,

@@ -50,7 +50,7 @@ export const getRelevantDocumentChunksService = async (question, topK = 5) => {
       topK,
     });
 
-    const threshold = -9;
+    const threshold = -8;
 
     const relevantChunks = rerankedChunks.filter((chunk) => {
       return chunk.rerankScore >= threshold;

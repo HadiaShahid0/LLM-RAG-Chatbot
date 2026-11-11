@@ -1,52 +1,35 @@
 import Message from "../models/messageModel.js";
 import Conversation from "../models/conversationModel.js";
-import { generateGeminiResponseStream } from "../services/geminiServices.js";
+import { Op } from "sequelize";
+
 import {
   validateUserInputService,
   validateAIInputService,
   MAX_AI_RESPONSE_LENGTH,
 } from "./guardrailsServices.js";
+
 import {
   getConversationContextService,
   updateConversationSummaryService,
 } from "./conversationServices.js";
-import { Op } from "sequelize";
+
 import { uploadFileToGemini } from "./geminiServices.js";
-import {
-  getCitationsService,
-  formatCitationsService,
-} from "./citationsService.js";
-import { generateGeminiResponseWithTools } from "./geminiServices.js";
-// import { selectChunksWithMMR } from "../rag/services/mmrService.js";
 
-import { retrieveRelevantChunksService } from "../rag/services/retrievalService.js";
-
+import { generateGeminiResponseWithTools } from "../agents/langchainAgent.js";
 
 export const streamGeminiResponseService = async (aiResponse, res) => {
-  let completeResponse = "";
+  const responseText =
+    typeof aiResponse === "string"
+      ? aiResponse
+      : typeof aiResponse?.content === "string"
+        ? aiResponse.content
+        : "";
 
-  for await (const chunk of aiResponse) {
-    const chunkText = chunk.text || "";
-
-    const remainingLength = MAX_AI_RESPONSE_LENGTH - completeResponse.length;
-
-    if (remainingLength <= 0) break;
-
-    const textToSend = chunkText.slice(0, remainingLength);
-
-    completeResponse += textToSend;
-
-    if (textToSend) res.write(textToSend);
-
-    if (textToSend.length < chunkText.length) {
-      break;
-    }
-  }
+  const completeResponse = responseText.slice(0, MAX_AI_RESPONSE_LENGTH);
 
   const validatedResponse = validateAIInputService(completeResponse);
 
-  if (!completeResponse.trim()) res.write(validatedResponse);
-
+  if (validatedResponse) res.write(validatedResponse);
   return validatedResponse;
 };
 
@@ -167,10 +150,9 @@ export const createMessageService = async (
   // const aiResponse= await generateGeminiResponseStream(conversationContext, res);
   const aiResponseText =
     await generateGeminiResponseWithTools(conversationContext);
-  const aiResponse = (async function* () {
-    yield { text: aiResponseText };
-  })();
-  const assistantContent = await streamGeminiResponseService(aiResponse, res);
+
+ 
+  const assistantContent = await streamGeminiResponseService(aiResponseText, res);
 
   const assistantMessage = await Message.create({
     conversationId,

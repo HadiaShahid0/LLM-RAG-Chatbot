@@ -1,6 +1,8 @@
 export const getCitationsService = (response) => {
   const groundingChunks =
-    response.candidates?.[0]?.groundingMetadata?.groundingChunks || [];
+    response.response_metadata?.groundingMetadata?.groundingChunks ||
+    response.response_metadata?.groundingChunks ||
+    [];
 
   return groundingChunks
     .map((chunk) => {
@@ -24,9 +26,6 @@ export const formatCitationsService = (citations) => {
   if (!uniqueCitations.length) return "";
 
   return `\n\n### Sources\n${uniqueCitations
-    .map(
-      (source, index) =>
-        `[${index + 1}] [${source.title}](${source.url})`,
-    )
+    .map((source, index) => `[${index + 1}] [${source.title}](${source.url})`)
     .join("\n")}`;
 };

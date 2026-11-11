@@ -20,6 +20,7 @@ const loadRerankerModel = async () => {
 export const rerankChunksService = async ({ question, chunks, topK = 7 }) => {
   if (!question || !question.trim())
     throw new Error("Question cannot be empty");
+  
   if (!chunks || chunks.length === 0) return [];
 
   const { tokenizer, rerankerModel } = await loadRerankerModel();
@@ -46,6 +47,16 @@ export const rerankChunksService = async ({ question, chunks, topK = 7 }) => {
   chunksWithScores.sort((chunkA, chunkB) => {
     return chunkB.rerankScore - chunkA.rerankScore;
   });
+  console.log("\n========== RERANKING RESULTS ==========");
+
+  console.table(
+    chunksWithScores.map((chunk, index) => ({
+      rank: index + 1,
+      id: chunk.id,
+      rerankScore: chunk.rerankScore,
+      rrfScore: chunk.rrfScore,
+    })),
+  );
 
   return chunksWithScores.slice(0, topK);
 };

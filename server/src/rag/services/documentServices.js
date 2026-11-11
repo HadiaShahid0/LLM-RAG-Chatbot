@@ -3,7 +3,7 @@ import {
   splitTextIntoChunksService,
   cleanPDFTextService,
 } from "./chunkServices.js";
-import { generateDocumentEmbeddingService } from "./embeddingService.js";
+import { embeddings } from "./embeddingService.js";
 import { getDocumentCollectionService } from "./vectorStoreServices.js";
 
 export const storePDFInChromaService = async ({
@@ -16,17 +16,20 @@ export const storePDFInChromaService = async ({
 
   console.log("Extracting PDF text...");
 
-  const extractedText = await extractTextFromPDFService(filePath);
+  const documents = await extractTextFromPDFService(filePath);
   console.log("PDF text extracted successfully");
-  const cleanedText = cleanPDFTextService(extractedText);
+  const cleanedDocuments = cleanPDFTextService(documents);
 
   console.log("PDF text cleaned successfully");
-  const chunks = await splitTextIntoChunksService(cleanedText, 1000, 200);
+  const chunks = await splitTextIntoChunksService(cleanedDocuments, 1000, 200);
   console.log("Total Chunks: ", chunks.length);
+
+  if(!chunks.length) throw new Error("No Chunks Generated From PDF")
+    console.log("Total Chunks",chunks.length)
   chunks.forEach((chunk, index) => {
     console.log(`\n========== CHUNK ${index + 1} ==========`);
-    console.log(chunk);
-    console.log("\nChunk length:", chunk.length);
+    console.log(chunk.pageContent);
+    console.log("\nChunk length:", chunk.pageContent.length);
   });
   const embeddings = [];
 
@@ -52,6 +55,7 @@ export const storePDFInChromaService = async ({
       documentId: String(documentId),
       fileName: fileName || "Unknown PDF",
       chunkIndex: i,
+      pageNumber:chunk.metadata?.loc?.pageNumber || 0,
       scope: "shared",
     });
   }

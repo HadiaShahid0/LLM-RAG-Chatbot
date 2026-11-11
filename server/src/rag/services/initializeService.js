@@ -13,7 +13,7 @@ export const initializeHybridSearchService = async () => {
       .map((text, index) => ({
         id: storedDocuments.ids[index],
         text,
-        metadata: storedDocuments.metadata?.[index] || {},
+        metadata: storedDocuments.metadatas?.[index] || {},
       }))
       .filter((chunk) => chunk.text);
     buildKeywordIndexService(chunks);
