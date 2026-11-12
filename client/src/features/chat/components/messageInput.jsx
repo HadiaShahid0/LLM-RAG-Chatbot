@@ -1,23 +1,30 @@
-import { useState,useEffect } from "react";
-import { FiSend, FiPaperclip, FiX, FiCpu, FiChevronDown } from "react-icons/fi";
+import { useState, useEffect } from "react";
+import {
+  FiSend,
+  FiPaperclip,
+  FiX,
+  FiCpu,
+  FiChevronDown,
+  FiSquare,
+} from "react-icons/fi";
 
-const MessageInput = ({ onSend, disabled }) => {
+const MessageInput = ({ onSend, onStop, disabled}) => {
   const [content, setContent] = useState("");
 
   const [selectedFile, setSelectedFile] = useState(null);
-  const [selectedModel, setSelectedModel] = useState(()=>{
-    return localStorage.getItem("selectedModel") || "gemini"
+  const [selectedModel, setSelectedModel] = useState(() => {
+    return localStorage.getItem("selectedModel") || "gemini";
   });
 
   const [loading, setLoading] = useState(false);
-
+  const isGenerating = disabled || loading;
   useEffect(() => {
     localStorage.setItem("selectedModel", selectedModel);
   }, [selectedModel]);
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if ((!content.trim() && !selectedFile) || loading) return;
+    if ((!content.trim() && !selectedFile) || isGenerating) return;
     const message = content;
     const file = selectedFile;
 
@@ -81,16 +88,29 @@ const MessageInput = ({ onSend, disabled }) => {
           onKeyDown={handleKeyDown}
           placeholder="Ask anything..."
           rows="1"
-          disabled={disabled}
+          disabled={isGenerating}
         />
 
-        <button
-          type="submit"
-          className="send-message-btn"
-          disabled={disabled || (!content.trim() && !selectedFile)}
-        >
-          <FiSend size={18} />
-        </button>
+        {isGenerating ? (
+          <button
+            type="button"
+            className="send-message-btn stop-generation-btn"
+            onClick={onStop}
+            title="Stop Generating"
+            aria-label="Stop Generating"
+          >
+            <FiSquare size={16} />
+          </button>
+        ) : (
+          <button
+            type="submit"
+            className="send-message-btn"
+            disabled={disabled || (!content.trim() && !selectedFile)}
+            title="Send message"
+          >
+            <FiSend size={18} />
+          </button>
+        )}
       </form>
 
       <div className="input-footer d-flex align-items-center justify-content-between">
@@ -98,20 +118,19 @@ const MessageInput = ({ onSend, disabled }) => {
           Press <strong>Enter</strong> to send
         </span>
         <div className="model-selector">
-          <FiCpu size={16}/>
-        <select
-          className="form-select form-select-sm w-auto"
-          value={selectedModel}
-          onChange={(e) => setSelectedModel(e.target.value)}
-          disabled={disabled || loading}
-          aria-label="Select AI Model"
-        >
-          <option value="gemini">Gemini 3.1 flash lite</option>
-          <option value="groq">GPT-OSS 120B · Groq</option>
-        </select>
-        <FiChevronDown className="model-chevron" size={14}/>
+          <FiCpu size={16} />
+          <select
+            className="form-select form-select-sm w-auto"
+            value={selectedModel}
+            onChange={(e) => setSelectedModel(e.target.value)}
+            disabled={disabled || loading}
+            aria-label="Select AI Model"
+          >
+            <option value="gemini">Gemini 3.1 flash lite</option>
+            <option value="groq">GPT-OSS 120B · Groq</option>
+          </select>
+          <FiChevronDown className="model-chevron" size={14} />
         </div>
-
       </div>
     </div>
   );

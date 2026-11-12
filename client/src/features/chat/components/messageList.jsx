@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useEffect, useRef } from "react";
 import {
   FiUser,
@@ -6,12 +7,22 @@ import {
   FiBookOpen,
   FiHelpCircle,
   FiFile,
+  FiCheck,
+  FiCopy,
+  FiRefreshCw,
+  FiChevronLeft,
+  FiChevronRight,
 } from "react-icons/fi";
+
 import ReactMarkdown from "react-markdown";
+
 import remarkGfm from "remark-gfm";
-const MessageList = ({ messages, loading }) => {
+
+const MessageList = ({ messages, loading, onRegenerate, onSwitchVersion }) => {
   const bottomRef = useRef(null);
   const messagesContainerRef = useRef(null);
+
+  const [copiedId, setCopiedId] = useState(null);
 
   useEffect(() => {
     const container = messagesContainerRef.current;
@@ -23,6 +34,32 @@ const MessageList = ({ messages, loading }) => {
       behavior: "smooth",
     });
   }, [messages]);
+
+  const handleCopy = async (message) => {
+    try {
+      await navigator.clipboard.writeText(message.content);
+      setCopiedId(message.id);
+      setTimeout(() => {
+        setCopiedId(null);
+      }, 2000);
+    } catch (error) {
+      console.error("Copy error", error);
+    }
+  };
+
+  const handleRegenerateResponse = (index) => {
+    if (loading || !onRegenerate) return;
+
+    const assistantMessage = messages[index];
+
+    const userMessage = [...messages.slice(0, index)]
+      .reverse()
+      .find((message) => message.role === "user");
+
+    if (!userMessage) return;
+
+    onRegenerate(userMessage, assistantMessage);
+  };
 
   if (messages.length === 0) {
     return (
@@ -89,8 +126,12 @@ const MessageList = ({ messages, loading }) => {
   return (
     <div className="messages-scroll" ref={messagesContainerRef}>
       <div className="messages-content">
-        {messages.map((message) => {
+        {messages.map((message, index) => {
           const isUser = message.role === "user";
+
+          const versions = message.versions || [message.content || ""];
+          const currentVersion = message.currentVersion || 0;
+          const currentContent = versions[currentVersion] || "";
 
           return (
             <div
@@ -163,9 +204,9 @@ const MessageList = ({ messages, loading }) => {
                         </div>
                       )}
                     </>
-                  ) : message.content ? (
+                  ) : currentContent ? (
                     <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                      {message.content}
+                      {currentContent}
                     </ReactMarkdown>
                   ) : loading &&
                     message.id === messages[messages.length - 1]?.id ? (
@@ -176,6 +217,73 @@ const MessageList = ({ messages, loading }) => {
                     </div>
                   ) : null}
                 </div>
+                {message.status === "interrupted" && (
+                  <div className="interrupted-message">
+                    <span>Response interrupted</span>
+                  </div>
+                )}
+                {!isUser && currentContent && !loading && (
+                  <div className="message-action-btn">
+                    <button
+                      type="button"
+                      className="message-action-btn"
+                      onClick={() =>
+                        handleCopy({ ...message, content: currentContent })
+                      }
+                      title="Copy Response"
+                      aria-label="Copy Response"
+                    >
+                      {copiedId === message.id ? (
+                        <FiCheck size={15} />
+                      ) : (
+                        <FiCopy size={15} />
+                      )}
+                    </button>
+                    <button
+                      type="button"
+                      className="message-action-btn"
+                      onClick={() => handleRegenerateResponse(index)}
+                      disabled={loading || !onRegenerate}
+                      title="Regenerate Response"
+                      aria-label="Regenerate Response"
+                    >
+                      <FiRefreshCw size={15} />
+                    </button>
+                    {versions.length > 1 && (
+                      <div className="version-navigation">
+                        <button
+                          type="button"
+                          className="version-arrow"
+                          disabled={currentVersion === 0}
+                          onClick={() =>
+                            onSwitchVersion(message.id, currentVersion - 1)
+                          }
+                          title="Previous Response"
+                          aria-label="Previous Response"
+                        >
+                          <FiChevronLeft size={16} />
+                        </button>
+
+                        <span>
+                          {currentVersion + 1}/{versions.length}
+                        </span>
+
+                        <button
+                          type="button"
+                          className="version-arrow"
+                          disabled={currentVersion === versions.length - 1}
+                          onClick={() =>
+                            onSwitchVersion(message.id, currentVersion + 1)
+                          }
+                          title="Next response"
+                          aria-label="Next Response"
+                        >
+                          <FiChevronRight size={16} />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           );

@@ -26,6 +26,16 @@ const Message = db.define(
       allowNull: true,
       defaultValue: [],
     },
+    versions: {
+      type: DataTypes.JSON,
+      allowNull: false,
+      defaultValue: [],
+    },
+    currentVersion: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+      defaultValue: 0,
+    },
     fileName: {
       type: DataTypes.STRING,
       allowNull: true,

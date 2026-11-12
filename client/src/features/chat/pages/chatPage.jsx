@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 
 import {
   getConversationsServices,
@@ -6,6 +6,8 @@ import {
   getMessagesServices,
   sendMessageServices,
   logoutServices,
+  regenerateMessageServices,
+  deleteConversationService,
 } from "../services/chatServices";
 
 import ChatSidebar from "../components/chatSidebar";
@@ -13,7 +15,7 @@ import MessageList from "../components/messageList";
 import MessageInput from "../components/messageInput";
 
 import "./chatPage.css";
-
+import { FiMenu } from "react-icons/fi";
 const ChatPage = () => {
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
@@ -22,7 +24,8 @@ const ChatPage = () => {
 
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
-
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const abortControllerRef=useRef(null)
   useEffect(() => {
     loadConversations();
   }, []);
@@ -87,16 +90,48 @@ const ChatPage = () => {
     await loadMessages(conversationId);
   };
 
-  const handleSendMessage = async (content, file,selectedModel) => {
+  const handleDeleteConversation = async (conversationId) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this comversation?",
+    );
+    if (!confirmed) return;
+
+    try {
+      await deleteConversationService(conversationId);
+      const updatedConversations = conversations.filter(
+        (conversation) => conversation.id !== conversationId,
+      );
+
+      setConversations(updatedConversations);
+
+      if (activeConversationId === conversationId) {
+        if (updatedConversations.length > 0) {
+          const nextConversation = updatedConversations[0];
+          setActiveConversationId(nextConversation.id);
+          await loadMessages(nextConversation.id);
+        } else {
+          setActiveConversationId(null);
+          setMessages([]);
+        }
+      }
+    } catch (error) {
+      console.error("Delete conversation error", error);
+    }
+  };
+
+  const handleSendMessage = async (content, file, selectedModel) => {
     if ((!content.trim() && !file) || !activeConversationId || loading) {
       return;
     }
+    const conversationId = activeConversationId;
     const userContent = content.trim();
-
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
     const userMessage = {
       id: `temp-${Date.now()}`,
       role: "user",
       content: userContent,
+      model: selectedModel,
       file: file || null,
       fileName: file?.name || null,
       fileType: file?.type || null,
@@ -106,15 +141,17 @@ const ChatPage = () => {
       id: Date.now() + 1,
       role: "assistant",
       content: "",
+      versions: [""],
+      currentVersion: 0,
     };
-   
+
     setMessages((previous) => [...previous, userMessage, assistantMessage]);
 
     setLoading(true);
 
     try {
       await sendMessageServices(
-        activeConversationId,
+        conversationId,
         userContent,
         file,
         selectedModel,
@@ -130,19 +167,110 @@ const ChatPage = () => {
             ),
           );
         },
+        controller.signal,
       );
+      if (activeConversationId === conversationId) {
+        await loadConversations();
+        await loadMessages(conversationId);
+      }
     } catch (error) {
-      console.error("Send message error:", error);
+      if (error.name === "AbortError") {
+        setMessages((previous) =>
+          previous.map((message) =>
+            message.id === assistantMessage.id
+              ? {
+                  ...message,
+                  status: "interrupted",
+                }
+              : message,
+          ),
+        );
+      } else {
+        console.error("Send message error:", error);
+      }
+    } finally {
+      abortControllerRef.current = null;
+      setLoading(false);
+    }
+  };
+  const handleStopGeneration = () => {
+    abortControllerRef.current?.abort();
+  };
+  const handleRegenerate = async (userMessage, assistantMessage) => {
+    if (!activeConversationId || loading) return;
 
+    const conversationId = activeConversationId;
+
+    const versions = assistantMessage.versions || [
+      assistantMessage.content || "",
+    ];
+    const newVersionIndex = versions.length;
+    setLoading(true);
+
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === assistantMessage.id
+          ? {
+              ...message,
+              versions: [...versions, ""],
+              currentVersion: newVersionIndex,
+            }
+          : message,
+      ),
+    );
+    let generatedContent = "";
+    try {
+      await regenerateMessageServices(
+        conversationId,
+        userMessage.id,
+        userMessage.model || "gemini",
+        (chunk) => {
+          generatedContent += chunk;
+          setMessages((prev) =>
+            prev.map((message) =>
+              message.id === assistantMessage.id
+                ? {
+                    ...message,
+                    versions: message.versions.map((version, index) =>
+                      index === newVersionIndex ? generatedContent : version,
+                    ),
+                  }
+                : message,
+            ),
+          );
+        },
+      );
+    } catch (err) {
       setMessages((prev) =>
-        prev.filter(
-          (message) =>
-            message.id !== userMessage.id && message.id !== assistantMessage.id,
+        prev.map((message) =>
+          message.id === assistantMessage.id
+            ? {
+                ...message,
+                versions: message.versions.filter(
+                  (_, index) => index !== newVersionIndex,
+                ),
+                currentVersion: Math.max(0, newVersionIndex - 1),
+              }
+            : message,
         ),
       );
+      console.log("Regenerate message error:", err);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSwitchVersion = (messageId, versionIndex) => {
+    setMessages((prev) =>
+      prev.map((message) =>
+        message.id === messageId
+          ? {
+              ...message,
+              currentVersion: versionIndex,
+            }
+          : message,
+      ),
+    );
   };
 
   if (initialLoading) {
@@ -160,21 +288,46 @@ const ChatPage = () => {
   }
 
   return (
-    <div className="chat-page">
-      <ChatSidebar
-        conversations={conversations}
-        activeConversationId={activeConversationId}
-        onSelectConversation={handleSelectConversation}
-        onNewChat={handleNewChat}
-        onLogout={handleLogout}
-      />
+    <div className={`chat-page ${sidebarOpen ? "" : "sidebar-closed"}`}>
+      {sidebarOpen && (
+        <ChatSidebar
+          conversations={conversations}
+          activeConversationId={activeConversationId}
+          onSelectConversation={handleSelectConversation}
+          onNewChat={handleNewChat}
+          onLogout={handleLogout}
+          onDeleteConversation={handleDeleteConversation}
+          onCloseSidebar={() => setSidebarOpen(false)}
+        />
+      )}
 
       <main className="chat-main">
+        {!sidebarOpen && (
+          <button
+            type="button"
+            className="sidebar-open-btn"
+            onClick={() => setSidebarOpen(true)}
+            title="Open sidebar"
+            aria-label="Open sidebar"
+          >
+            <FiMenu size={21} />
+          </button>
+        )}
+
         <div className="chat-messages">
-          <MessageList messages={messages} loading={loading} />
+          <MessageList
+            messages={messages}
+            loading={loading}
+            onRegenerate={handleRegenerate}
+            onSwitchVersion={handleSwitchVersion}
+          />
         </div>
 
-        <MessageInput onSend={handleSendMessage} disabled={loading} />
+        <MessageInput
+          onSend={handleSendMessage}
+          onStop={handleStopGeneration}
+          disabled={loading}
+        />
       </main>
     </div>
   );
