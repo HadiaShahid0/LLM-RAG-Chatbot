@@ -56,11 +56,13 @@ export const sendMessageServices = async (
   conversationId,
   content,
   file,
+  selectedModel,
   onChunk,
 ) => {
   const formData = new FormData();
 
   formData.append("conversationId", conversationId);
+  formData.append("model", selectedModel);
   formData.append("content", content);
 
   if (file) {

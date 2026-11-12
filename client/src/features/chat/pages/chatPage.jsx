@@ -87,7 +87,7 @@ const ChatPage = () => {
     await loadMessages(conversationId);
   };
 
-  const handleSendMessage = async (content, file) => {
+  const handleSendMessage = async (content, file,selectedModel) => {
     if ((!content.trim() && !file) || !activeConversationId || loading) {
       return;
     }
@@ -117,6 +117,7 @@ const ChatPage = () => {
         activeConversationId,
         userContent,
         file,
+        selectedModel,
         (chunk) => {
           setMessages((prev) =>
             prev.map((message) =>

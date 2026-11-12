@@ -7,13 +7,14 @@ import {
 
 export const createMessage = async (req, res) => {
   try {
-    const { conversationId, content } = req.body;
+    const { conversationId, content, model } = req.body;
 
     await createMessageService(
       conversationId,
       req.user.id,
       content,
       req.file,
+      model,
       res,
     );
     res.end();

@@ -16,6 +16,7 @@ import {
 import { uploadFileToGemini } from "./geminiServices.js";
 
 import { generateGeminiResponseWithTools } from "../agents/langchainAgent.js";
+import { getRelevantDocumentChunksService } from "../tools/toolService.js";
 
 export const streamGeminiResponseService = async (aiResponse, res) => {
   const responseText =
@@ -51,42 +52,43 @@ export const streamGeminiResponseService = async (aiResponse, res) => {
 //   return selectedChunks.map(({ embedding, ...chunk }) => chunk);
 // };
 
-// export const buildDocumentContextService = (chunks) => {
-//   if (!chunks.length) {
-//     return null;
-//   }
+export const buildDocumentContextService = (chunks) => {
+  if (!chunks.length) {
+    return null;
+  }
 
-//   const documentContext = chunks
-//     .map((chunk, index) => {
-//       return `Document Chunk ${index + 1}:\n${chunk.text}`;
-//     })
-//     .join("\n\n");
+  const documentContext = chunks
+    .map((chunk, index) => {
+      return `Document Chunk ${index + 1}:\n${chunk.text}`;
+    })
+    .join("\n\n");
 
-//   return `
-// Relevant information retrieved from the provided document:
+  return `
+Relevant information retrieved from the provided document:
 
-// ${documentContext}
+${documentContext}
 
-// Instructions:
-// - For questions about provided documents, base factual claims on the available document context.
-// - Do not invent facts or claim information is present when it is not.
-// - Do not use general knowledge to fill gaps in document-specific answers.
-// - If the context does not support an answer, clearly explain what information is missing.
-// - Combine information from multiple chunks when necessary.
-// - When listing items, include all matching items supported by the provided context.
-// - Avoid duplicate items.
-// - Use conversation history to understand follow-up questions when relevant, but do not treat it as proof of what a document contains.
-// - For unrelated general questions, answer normally using general knowledge.
-// - Do not mention chunks, embeddings, vector databases, or retrieval unless explicitly asked.
-// - Keep the answer focused on the user's question.
-// `;
-// };
+Instructions:
+- For questions about provided documents, base factual claims on the available document context.
+- Do not invent facts or claim information is present when it is not.
+- Do not use general knowledge to fill gaps in document-specific answers.
+- If the context does not support an answer, clearly explain what information is missing.
+- Combine information from multiple chunks when necessary.
+- When listing items, include all matching items supported by the provided context.
+- Avoid duplicate items.
+- Use conversation history to understand follow-up questions when relevant, but do not treat it as proof of what a document contains.
+- For unrelated general questions, answer normally using general knowledge.
+- Do not mention chunks, embeddings, vector databases, or retrieval unless explicitly asked.
+- Keep the answer focused on the user's question.
+`;
+};
 
 export const createMessageService = async (
   conversationId,
   userId,
   content,
   file,
+  selectedModel,
   res,
 ) => {
   validateUserInputService(content ?? "", file);
@@ -102,7 +104,8 @@ export const createMessageService = async (
 
   let uploadedFile = null;
 
-  if (file) uploadedFile = await uploadFileToGemini(file);
+  if (file && selectedModel === "gemini")
+    uploadedFile = await uploadFileToGemini(file);
 
   const userMessage = await Message.create({
     conversationId,
@@ -147,12 +150,26 @@ export const createMessageService = async (
 
   conversationContext.push(...recentContext);
 
+  if(file && selectedModel=== "groq") {
+    const retrievedChunks= await getRelevantDocumentChunksService(content,5)
+    const documentContext=buildDocumentContextService(retrievedChunks)
+    if(documentContext){
+      conversationContext.push({
+        role:"user",
+        parts: [{text: documentContext}]
+      })
+    }
+  };
   // const aiResponse= await generateGeminiResponseStream(conversationContext, res);
-  const aiResponseText =
-    await generateGeminiResponseWithTools(conversationContext);
+  const aiResponseText = await generateGeminiResponseWithTools(
+    conversationContext,
+    selectedModel,
+  );
 
- 
-  const assistantContent = await streamGeminiResponseService(aiResponseText, res);
+  const assistantContent = await streamGeminiResponseService(
+    aiResponseText,
+    res,
+  );
 
   const assistantMessage = await Message.create({
     conversationId,
