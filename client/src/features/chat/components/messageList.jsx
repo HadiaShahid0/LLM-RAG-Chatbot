@@ -8,7 +8,7 @@ import {
   FiFile,
 } from "react-icons/fi";
 import ReactMarkdown from "react-markdown";
-
+import remarkGfm from "remark-gfm";
 const MessageList = ({ messages, loading }) => {
   const bottomRef = useRef(null);
   const messagesContainerRef = useRef(null);
@@ -164,7 +164,9 @@ const MessageList = ({ messages, loading }) => {
                       )}
                     </>
                   ) : message.content ? (
-                    <ReactMarkdown>{message.content}</ReactMarkdown>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {message.content}
+                    </ReactMarkdown>
                   ) : loading &&
                     message.id === messages[messages.length - 1]?.id ? (
                     <div className="typing-bubble">

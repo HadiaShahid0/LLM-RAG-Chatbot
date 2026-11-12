@@ -1,22 +1,31 @@
-import { useState } from "react";
-import { FiSend, FiPaperclip, FiX } from "react-icons/fi";
+import { useState,useEffect } from "react";
+import { FiSend, FiPaperclip, FiX, FiCpu, FiChevronDown } from "react-icons/fi";
 
 const MessageInput = ({ onSend, disabled }) => {
   const [content, setContent] = useState("");
 
   const [selectedFile, setSelectedFile] = useState(null);
+  const [selectedModel, setSelectedModel] = useState(()=>{
+    return localStorage.getItem("selectedModel") || "gemini"
+  });
 
   const [loading, setLoading] = useState(false);
 
+  useEffect(() => {
+    localStorage.setItem("selectedModel", selectedModel);
+  }, [selectedModel]);
+
   const handleSubmit = async (event) => {
     event.preventDefault();
-    if (!content.trim() && !selectedFile) {
-      return;
-    }
+    if ((!content.trim() && !selectedFile) || loading) return;
+    const message = content;
+    const file = selectedFile;
+
     setContent("");
     setSelectedFile(null);
+    setLoading(true);
     try {
-      await onSend(content, selectedFile);
+      await onSend(message, file, selectedModel);
     } catch (error) {
       console.error("Send message error:", error);
     } finally {
@@ -84,10 +93,25 @@ const MessageInput = ({ onSend, disabled }) => {
         </button>
       </form>
 
-      <div className="input-footer">
+      <div className="input-footer d-flex align-items-center justify-content-between">
         <span>
           Press <strong>Enter</strong> to send
         </span>
+        <div className="model-selector">
+          <FiCpu size={16}/>
+        <select
+          className="form-select form-select-sm w-auto"
+          value={selectedModel}
+          onChange={(e) => setSelectedModel(e.target.value)}
+          disabled={disabled || loading}
+          aria-label="Select AI Model"
+        >
+          <option value="gemini">Gemini 3.1 flash lite</option>
+          <option value="groq">GPT-OSS 120B · Groq</option>
+        </select>
+        <FiChevronDown className="model-chevron" size={14}/>
+        </div>
+
       </div>
     </div>
   );

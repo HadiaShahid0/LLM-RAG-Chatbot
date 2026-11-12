@@ -1,4 +1,6 @@
 import { ChatGoogle } from "@langchain/google";
+import { ChatGroq } from "@langchain/groq";
+import Groq from "groq-sdk";
 
 export const model = new ChatGoogle({
   model: "gemini-3.1-flash-lite",
@@ -22,4 +24,14 @@ export const model = new ChatGoogle({
       threshold: "BLOCK_MEDIUM_AND_ABOVE",
     },
   ],
+});
+
+export const groqModel = new ChatGroq({
+  model: "openai/gpt-oss-120b",
+  apiKey: process.env.GROQ_API_KEY,
+  temperature: 0.7,
+});
+
+export const groqClient = new Groq({
+  apiKey: process.env.GROQ_API_KEY,
 });
