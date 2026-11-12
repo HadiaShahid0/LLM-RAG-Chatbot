@@ -2,8 +2,8 @@ import {
   createMessageService,
   getMessagesByConversationIdService,
   getMessageByIdService,
+  regenerateMessageService,
 } from "../services/messageServices.js";
-
 
 export const createMessage = async (req, res) => {
   try {
@@ -31,6 +31,30 @@ export const createMessage = async (req, res) => {
   }
 };
 
+export const regenerateMessage = async (req, res) => {
+  try {
+    const { conversationId, model } = req.body;
+    const { messageId } = req.params;
+
+    await regenerateMessageService({
+      conversationId,
+      userId: req.user.id,
+      messageId,
+      selectedModel: model,
+      res,
+    });
+    res.end();
+  } catch (error) {
+    console.error("Error regenerating message", error);
+    if (!res.headersSent) {
+      return res.status(500).json({
+        message: "Error regenerating message",
+        error: error.message,
+      });
+    }
+    res.end();
+  }
+};
 export const getMessagesByConversationId = async (req, res) => {
   const conversationId = req.params.conversationId;
   const userId = req.user.id;

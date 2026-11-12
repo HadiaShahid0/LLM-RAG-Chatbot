@@ -1,4 +1,5 @@
 import { Message, Conversation } from "../models/index.js";
+import User from "../models/userModel.js";
 import { model } from "../config/langchain.js";
 import { Op } from "sequelize";
 
@@ -109,17 +110,24 @@ Return only the updated summary, without headings or additional explanations.
   return summaryText;
 };
 
-export const getConversationContextService = async (conversationId) => {
+export const getConversationContextService = async (
+  conversationId,
+  beforeMessageId = null,
+) => {
   const conversation = await Conversation.findByPk(conversationId);
 
   if (!conversation) {
     throw new Error("Conversation not found");
   }
+  const where = { conversationId };
+  if (beforeMessageId) {
+    where.id = {
+      [Op.lt]: beforeMessageId,
+    };
+  }
 
   const previousMessages = await Message.findAll({
-    where: {
-      conversationId,
-    },
+    where,
     order: [["createdAt", "DESC"]],
     limit: 5,
   });
@@ -153,4 +161,15 @@ export const getConversationContextService = async (conversationId) => {
     summary: conversation.summary || "",
     recentContext,
   };
+};
+
+export const deleteConversationService = async (userId, conversationId) => {
+  const conversation = await Conversation.findOne({
+    where: { id: conversationId, userId },
+  });
+  if (!conversation) throw new Error("Conversation not found");
+
+  conversation.destroy();
+
+  return { message: "Conversation deleted successfully" };
 };

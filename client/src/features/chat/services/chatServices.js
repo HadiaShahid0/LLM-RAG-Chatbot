@@ -58,6 +58,7 @@ export const sendMessageServices = async (
   file,
   selectedModel,
   onChunk,
+  signal
 ) => {
   const formData = new FormData();
 
@@ -73,6 +74,7 @@ export const sendMessageServices = async (
     method: "POST",
     credentials: "include",
     body: formData,
+    signal
   });
 
   if (!response.ok) {
@@ -108,6 +110,54 @@ export const sendMessageServices = async (
   }
 };
 
+export const regenerateMessageServices = async (
+  conversationId,
+  messageId,
+  selectedModel,
+  onChunk,
+) => {
+  const response = await fetch(`${API_URL}/messages/${messageId}/regenerate`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    credentials: "include",
+    body: JSON.stringify({
+      conversationId,
+      model: selectedModel,
+    }),
+  });
+  if (!response.ok) {
+    const errorText = await response.text();
+    throw new Error(errorText);
+  }
+
+  const reader = response.body.getReader();
+  const decoder = new TextDecoder();
+
+  let completeResponse = "";
+
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+
+      if (done) {
+        break;
+      }
+      const text = decoder.decode(value, { stream: true });
+
+      completeResponse += text;
+
+      if (onChunk) {
+        onChunk(text);
+      }
+    }
+
+    return completeResponse;
+  } finally {
+    reader.releaseLock();
+  }
+};
 export const logoutServices = async () => {
   const response = await fetch(`${API_URL}/auth/logout`, {
     method: "POST",
@@ -120,5 +170,21 @@ export const logoutServices = async () => {
     throw new Error(data.error || "Failed to logout");
   }
 
+  return data;
+};
+
+export const deleteConversationService = async (conversationId) => {
+  const response = await fetch(
+    `${API_URL}/conversations/${conversationId}`,
+    {
+      method: "DELETE",
+      credentials: "include",
+    },
+  );
+
+  const data = await response.json();
+
+  if (!response.ok)
+    throw new Error(data.error || "Failed to delete conversation");
   return data;
 };
