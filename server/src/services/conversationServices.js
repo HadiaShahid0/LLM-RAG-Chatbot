@@ -41,9 +41,8 @@ export const getConversationService = async (conversationId, userId) => {
 export const updateConversationSummaryService = async (conversationId) => {
   const conversation = await Conversation.findByPk(conversationId);
 
-  if (!conversation) {
-    throw new Error("Conversation not found");
-  }
+  if (!conversation) throw new Error("Conversation not found");
+
   const whereCondition = { conversationId };
 
   if (conversation.lastSummarizedMessageId) {
@@ -116,10 +115,10 @@ export const getConversationContextService = async (
 ) => {
   const conversation = await Conversation.findByPk(conversationId);
 
-  if (!conversation) {
-    throw new Error("Conversation not found");
-  }
+  if (!conversation) throw new Error("Conversation not found");
+
   const where = { conversationId };
+
   if (beforeMessageId) {
     where.id = {
       [Op.lt]: beforeMessageId,

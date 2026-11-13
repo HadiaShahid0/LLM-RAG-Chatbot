@@ -5,9 +5,9 @@ import {
   FiChevronRight,
   FiLogOut,
   FiTrash2,
-  FiX
+  FiX,
+  FiFileText
 } from "react-icons/fi";
-
 const ChatSidebar = ({
   conversations,
   activeConversationId,
@@ -16,6 +16,7 @@ const ChatSidebar = ({
   onLogout,
   onDeleteConversation,
   onCloseSidebar,
+  onOpenDocuments
 }) => {
   const handleDelete=(e,conversationId)=>{
     e.stopPropagation()
@@ -61,6 +62,11 @@ const ChatSidebar = ({
           <span>New conversation</span>
 
           <FiChevronRight size={17} className="ms-auto" />
+        </button>
+        <button type="button" className="documents-btn" onClick={onOpenDocuments}>
+          <FiFileText size={18}/>
+          <span>Documents</span>
+          <FiChevronRight size ={17} className="ms-auto"/>
         </button>
       </div>
 

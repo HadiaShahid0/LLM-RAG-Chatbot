@@ -1,6 +1,28 @@
 /* ========================================
    CHAT PAGE
 ======================================== */
+.documents-btn {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  margin-top: 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fff;
+  color: #374151;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.documents-btn:hover {
+  background: #f3f4f6;
+  border-color: #d1d5db;
+  color: #4f46e5;
+}
 .message-actions {
   display: flex;
   align-items: center;

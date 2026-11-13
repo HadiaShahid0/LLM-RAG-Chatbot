@@ -4,18 +4,29 @@ import { z } from "zod";
 import { searchDocuments } from "./toolRegistoery.js";
 import { searchWikipedia } from "./toolService.js";
 
-export const createLangChainTools = (citations = []) => {
+export const createLangChainTools = (userId, citations = []) => {
   return [
     tool(
       async ({ question }) => {
-        const results = await searchDocuments({ question });
+        const results = await searchDocuments({ question, userId });
 
         return JSON.stringify(results);
       },
       {
         name: "searchDocuments",
-        description:
-          "Search uploaded PDF documents for information relevant to the user's question. Use this tool when the user asks about their uploaded documents.",
+        description: `
+Search the authenticated user's uploaded PDF documents.
+
+Use this tool when:
+- The user asks questions about uploaded documents.
+- The user asks for explanations or summaries of uploaded PDFs.
+- The user asks to compare information from uploaded documents.
+- The user asks follow-up questions about information in uploaded PDFs.
+- The user asks whether a particular topic or detail exists in their documents.
+
+Search using a complete, meaningful question.
+Only use the returned results as evidence for document-specific answers.
+`,
         schema: z.object({
           question: z
             .string()

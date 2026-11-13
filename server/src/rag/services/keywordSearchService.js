@@ -1,16 +1,15 @@
 import bm25 from "wink-bm25-text-search";
-let keywordSearchEngine = null;
-let chunksById = new Map();
+
+const keywordIndexes = new Map();
 
 const prepareText = (text) => {
-  return text.toLowerCase().match(/[\p{L}\p{N}_.-]+/gu || []);
+  return text.toLowerCase().match(/[\p{L}\p{N}_.-]+/gu) || [];
 };
 
-export const buildKeywordIndexService = (chunks) => {
+const createKeywordIndex = (chunks) => {
   const engine = bm25();
+  const chunksById = new Map();
 
-  chunksById.clear()
-  
   engine.defineConfig({
     fldWeights: {
       text: 1,
@@ -26,21 +25,63 @@ export const buildKeywordIndexService = (chunks) => {
       },
       chunk.id,
     );
+
     chunksById.set(chunk.id, chunk);
   });
 
   engine.consolidate();
 
-  keywordSearchEngine = engine;
-  console.log(`BM25 indexed ${chunks.length} chunks`);
+  return {
+    engine,
+    chunksById,
+  };
 };
 
-export const searchKeywordChunksService = (question, topK = 7) => {
-  if (!question?.trim()) return [];
-  if (!keywordSearchEngine)
-    throw new Error("BM25 keyword index has not been initialized");
+export const buildKeywordIndexService = (chunks) => {
+  keywordIndexes.clear();
 
-  const results = keywordSearchEngine.search(question, topK);
+  const chunksByUser = new Map();
+
+  chunks.forEach((chunk) => {
+    const userId = String(chunk.metadata?.userId || "");
+
+    if (!userId) {
+      console.warn("Chunk is missing userId:", chunk.id);
+      return;
+    }
+
+    if (!chunksByUser.has(userId)) {
+      chunksByUser.set(userId, []);
+    }
+
+    chunksByUser.get(userId).push(chunk);
+  });
+
+  chunksByUser.forEach((userChunks, userId) => {
+    const keywordIndex = createKeywordIndex(userChunks);
+
+    keywordIndexes.set(userId, keywordIndex);
+
+    console.log(`BM25 indexed ${userChunks.length} chunks for user ${userId}`);
+  });
+};
+
+export const searchKeywordChunksService = (question, userId, topK = 7) => {
+  if (!question?.trim()) return [];
+
+  if (!userId) {
+    throw new Error("User ID is required");
+  }
+
+  const userIndex = keywordIndexes.get(String(userId));
+
+  if (!userIndex) {
+    return [];
+  }
+
+  const { engine, chunksById } = userIndex;
+
+  const results = engine.search(question, topK);
 
   const keywordResults = results
     .map(([id, score]) => {
@@ -56,6 +97,7 @@ export const searchKeywordChunksService = (question, topK = 7) => {
     .filter(Boolean);
 
   console.log("\n========== BM25 KEYWORD SEARCH ==========");
+  console.log("User ID:", userId);
   console.log("Question:", question);
   console.log("Requested topK:", topK);
   console.log("Results found:", keywordResults.length);
@@ -69,14 +111,6 @@ export const searchKeywordChunksService = (question, topK = 7) => {
       chunkIndex: chunk.metadata?.chunkIndex,
     })),
   );
-
-  keywordResults.forEach((chunk, index) => {
-    console.log(`\n--- Keyword Result ${index + 1} ---`);
-    console.log("ID:", chunk.id);
-    console.log("BM25 Score:", chunk.keywordScore);
-    console.log("Metadata:", chunk.metadata);
-    console.log("Text:", chunk.text);
-  });
 
   return keywordResults;
 };

@@ -15,12 +15,13 @@ export const searchWikipedia = async ({ topic }) => {
   }));
 };
 
-export const getRelevantDocumentChunksService = async (question, topK = 5) => {
+export const getRelevantDocumentChunksService = async (question, userId, topK = 5) => {
   if (!question?.trim()) return [];
-
+  if(!userId) throw new Error("user Id is required for document Retrieval")
   try {
     const candidateChunks = await hybridSearchService({
       question,
+      userId,
       topK: topK * 2,
     });
 
