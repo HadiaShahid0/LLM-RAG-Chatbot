@@ -1,9 +1,10 @@
 import { generateQueryEmbeddingService } from "./embeddingService.js";
 import { getDocumentCollectionService } from "./vectorStoreServices.js";
 
-export const retrieveRelevantChunksService = async ({ question, topK = 5 }) => {
+export const retrieveRelevantChunksService = async ({ question, userId, topK = 5 }) => {
   if (!question?.trim()) throw new Error("Question cannot be empty");
 
+  if(!userId) throw new Error("Question cannot be empty")
   const queryEmbedding = await generateQueryEmbeddingService(question);
 
   const collection = await getDocumentCollectionService();
@@ -12,7 +13,7 @@ export const retrieveRelevantChunksService = async ({ question, topK = 5 }) => {
     queryEmbeddings: [queryEmbedding],
     nResults: topK,
     where: {
-      scope: "shared",
+      userId: String(userId)
     },
   });
 

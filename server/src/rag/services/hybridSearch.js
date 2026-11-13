@@ -3,12 +3,16 @@ import { retrieveRelevantChunksService } from "./retrievalService.js";
 
 const K = 60;
 
-export const hybridSearchService = async ({ question, topK = 5 }) => {
+export const hybridSearchService = async ({ question, userId, topK = 5 }) => {
   if (!question.trim()) throw new Error("Question cannot be empty");
-
+  if(!userId) throw new Error("User Id is required")
   const [keywordResults, vectorResults] = await Promise.all([
-    searchKeywordChunksService(question, topK * 2),
-    retrieveRelevantChunksService({ question, topK: topK * 2 }),
+    searchKeywordChunksService(question, userId, topK * 2),
+    retrieveRelevantChunksService({
+      question,
+      userId,
+      topK: topK * 2,
+    }),
   ]);
 
   const fusedItems = new Map();

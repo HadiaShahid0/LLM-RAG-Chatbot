@@ -13,9 +13,16 @@ import {
 import ChatSidebar from "../components/chatSidebar";
 import MessageList from "../components/messageList";
 import MessageInput from "../components/messageInput";
-
+import DocumentsPage from "./documentPage";
 import "./chatPage.css";
+
 import { FiMenu } from "react-icons/fi";
+
+import {
+  getDocumentsService,
+  uploadDocumentService,
+  deleteDocumentService,
+} from "../services/documentService.js";
 const ChatPage = () => {
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
@@ -25,7 +32,13 @@ const ChatPage = () => {
   const [loading, setLoading] = useState(false);
   const [initialLoading, setInitialLoading] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
-  const abortControllerRef=useRef(null)
+
+  const [documents, setDocuments] = useState([]);
+  const [uploading, setUploading] = useState(false);
+  const [currentPage, setCurrentPage] = useState("chat");
+
+  const abortControllerRef = useRef(null);
+
   useEffect(() => {
     loadConversations();
   }, []);
@@ -193,9 +206,11 @@ const ChatPage = () => {
       setLoading(false);
     }
   };
+
   const handleStopGeneration = () => {
     abortControllerRef.current?.abort();
   };
+
   const handleRegenerate = async (userMessage, assistantMessage) => {
     if (!activeConversationId || loading) return;
 
@@ -273,6 +288,57 @@ const ChatPage = () => {
     );
   };
 
+  const loadDocuments = async () => {
+    try {
+      const data = await getDocumentsService();
+      setDocuments(data);
+    } catch (error) {
+      console.error("Load Documents error", error);
+    }
+  };
+
+  const handleDocumentUpload = async (files) => {
+    setUploading(true);
+    try {
+      for (const file of files) {
+        const document = await uploadDocumentService(file);
+        setDocuments((prev) => [document, ...prev]);
+      }
+    } catch (error) {
+      console.error("Document upload error: ", error);
+      alert(error.message);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleDocumentDelete = async (documentId) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this document",
+    );
+    if (!confirmed) return;
+    try {
+      await deleteDocumentService(documentId)
+      setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
+    } catch (error) {
+      console.error("Document delete error: ", error);
+    }
+  };
+  useEffect(() => {
+  if (currentPage !== "documents") return;
+
+  loadDocuments();
+}, [currentPage]);
+
+useEffect(() => {
+  if (currentPage !== "documents") return;
+
+  const interval = setInterval(() => {
+    loadDocuments();
+  }, 3000);
+
+  return () => clearInterval(interval);
+}, [currentPage]);
   if (initialLoading) {
     return (
       <div className="chat-loading vh-100 d-flex align-items-center justify-content-center">
@@ -289,19 +355,29 @@ const ChatPage = () => {
 
   return (
     <div className={`chat-page ${sidebarOpen ? "" : "sidebar-closed"}`}>
+      {/* Sidebar */}
       {sidebarOpen && (
         <ChatSidebar
           conversations={conversations}
           activeConversationId={activeConversationId}
-          onSelectConversation={handleSelectConversation}
-          onNewChat={handleNewChat}
+          onSelectConversation={(id) => {
+            setCurrentPage("chat");
+            handleSelectConversation(id);
+          }}
+          onNewChat={() => {
+            setCurrentPage("chat");
+            handleNewChat();
+          }}
           onLogout={handleLogout}
           onDeleteConversation={handleDeleteConversation}
           onCloseSidebar={() => setSidebarOpen(false)}
+          onOpenDocuments={() => setCurrentPage("documents")}
         />
       )}
 
+      {/* Main Content */}
       <main className="chat-main">
+        {/* Open Sidebar Button */}
         {!sidebarOpen && (
           <button
             type="button"
@@ -314,23 +390,35 @@ const ChatPage = () => {
           </button>
         )}
 
-        <div className="chat-messages">
-          <MessageList
-            messages={messages}
-            loading={loading}
-            onRegenerate={handleRegenerate}
-            onSwitchVersion={handleSwitchVersion}
+        {/* Documents Page */}
+        {currentPage === "documents" ? (
+          <DocumentsPage
+            documents={documents}
+            onUpload={handleDocumentUpload}
+            onDelete={handleDocumentDelete}
+            uploading={uploading}
           />
-        </div>
+        ) : (
+          /* Chat Page */
+          <>
+            <div className="chat-messages">
+              <MessageList
+                messages={messages}
+                loading={loading}
+                onRegenerate={handleRegenerate}
+                onSwitchVersion={handleSwitchVersion}
+              />
+            </div>
 
-        <MessageInput
-          onSend={handleSendMessage}
-          onStop={handleStopGeneration}
-          disabled={loading}
-        />
+            <MessageInput
+              onSend={handleSendMessage}
+              onStop={handleStopGeneration}
+              disabled={loading}
+            />
+          </>
+        )}
       </main>
     </div>
   );
 };
-
 export default ChatPage;

@@ -3,13 +3,14 @@ import {
   splitTextIntoChunksService,
   cleanPDFTextService,
 } from "./chunkServices.js";
-import { embeddings } from "./embeddingService.js";
+import { generateDocumentEmbeddingService } from "./embeddingService.js";
 import { getDocumentCollectionService } from "./vectorStoreServices.js";
 
 export const storePDFInChromaService = async ({
   filePath,
   documentId,
   fileName,
+  userId,
 }) => {
   if (!filePath || !documentId)
     throw new Error("Required document information is missing");
@@ -24,8 +25,8 @@ export const storePDFInChromaService = async ({
   const chunks = await splitTextIntoChunksService(cleanedDocuments, 1000, 200);
   console.log("Total Chunks: ", chunks.length);
 
-  if(!chunks.length) throw new Error("No Chunks Generated From PDF")
-    console.log("Total Chunks",chunks.length)
+  if (!chunks.length) throw new Error("No Chunks Generated From PDF");
+  console.log("Total Chunks", chunks.length);
   chunks.forEach((chunk, index) => {
     console.log(`\n========== CHUNK ${index + 1} ==========`);
     console.log(chunk.pageContent);
@@ -36,7 +37,9 @@ export const storePDFInChromaService = async ({
   for (let i = 0; i < chunks.length; i++) {
     console.log(`Generating embedding ${i + 1}/${chunks.length}...`);
 
-    const embedding = await generateDocumentEmbeddingService(chunks[i]);
+    const embedding = await generateDocumentEmbeddingService(
+      chunks[i].pageContent,
+    );
     embeddings.push(embedding);
     console.log(embedding);
   }
@@ -48,17 +51,15 @@ export const storePDFInChromaService = async ({
     ids.push(`document=${documentId}-chunk-${i}`);
   }
 
-  const metadatas = [];
+  const metadatas = chunks.map((chunk, index) => ({
+    documentId: String(documentId),
+    userId: String(userId),
+    fileName,
+    chunkIndex: index,
+    pageNumber: chunk.metadata?.loc?.pageNumber || 0,
+    scope: "user",
+  }));
 
-  for (let i = 0; i < chunks.length; i++) {
-    metadatas.push({
-      documentId: String(documentId),
-      fileName: fileName || "Unknown PDF",
-      chunkIndex: i,
-      pageNumber:chunk.metadata?.loc?.pageNumber || 0,
-      scope: "shared",
-    });
-  }
   const existingData = await collection.get({
     where: {
       documentId: String(documentId),
@@ -66,9 +67,10 @@ export const storePDFInChromaService = async ({
     include: ["metadatas"],
   });
 
+  const texts = chunks.map((chunk) => chunk.pageContent);
   await collection.upsert({
     ids,
-    documents: chunks,
+    documents: texts,
     embeddings,
     metadatas,
   });

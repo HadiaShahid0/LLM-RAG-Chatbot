@@ -1,16 +1,19 @@
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 
 export const cleanPDFTextService = (documents) => {
-  if (!documents?.trim()) throw new Error("PDF text cannot be empty");
+  if (!Array.isArray(documents) || documents.length === 0)
+    throw new Error("PDF text cannot be empty");
 
-  return documents.map((document) => {
-    let cleanedText = document.pageContent;
-    cleanedText = cleanedText.replace(/--\s*\d+\s+of\s+\d+\s*--/gi, "");
-    cleanedText = cleanedText.replace(/[^\S\n]+/g, " ");
-    cleanedText = cleanedText.replace(/\n{3,}/g, "\n\n");
-    cleanedText = cleanedText.trim();
-    return{ ...document, pageContent: cleanedText };
-  }).filter((document) => document.pageContent);
+  return documents
+    .map((document) => {
+      let cleanedText = document.pageContent;
+      cleanedText = cleanedText.replace(/--\s*\d+\s+of\s+\d+\s*--/gi, "");
+      cleanedText = cleanedText.replace(/[^\S\n]+/g, " ");
+      cleanedText = cleanedText.replace(/\n{3,}/g, "\n\n");
+      cleanedText = cleanedText.trim();
+      return { ...document, pageContent: cleanedText };
+    })
+    .filter((document) => document.pageContent);
 };
 
 export const splitTextIntoChunksService = async (
@@ -18,7 +21,8 @@ export const splitTextIntoChunksService = async (
   chunkSize = 1000,
   overlap = 200,
 ) => {
-  if (!documents?.trim()) throw new Error("Documents cannot be empty");
+  if (!Array.isArray(documents) || documents.length === 0)
+    throw new Error("Documents cannot be empty");
 
   if (chunkSize <= 0 || overlap < 0 || overlap >= chunkSize)
     throw new Error("Invalid chunk size or overlap");
@@ -29,7 +33,7 @@ export const splitTextIntoChunksService = async (
     separators: ["\n\n", "\n", " ", ""],
   });
 
-  return await splitter.splitText(text);
+  return await splitter.splitDocuments(documents);
 };
 
 // export const splitTextIntoChunksService = (text, chunkSize = 1000, overlap = 200) => {

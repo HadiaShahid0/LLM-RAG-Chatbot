@@ -15,9 +15,9 @@ import {
 
 import { uploadFileToGemini } from "./geminiServices.js";
 
-import { generateGeminiResponseWithTools } from "../agents/langchainAgent.js";
+import { generateGeminiResponseWithTools } from "../agents/langchainAgent.js";    
 import { getRelevantDocumentChunksService } from "../tools/toolService.js";
-const generateConversationTitle = async (content, selectedModel) => {
+const generateConversationTitle = async (content, selectedModel,userId) => {
   const response = await generateGeminiResponseWithTools(
     [
       {
@@ -38,6 +38,7 @@ User message: ${content}`,
       },
     ],
     selectedModel,
+    userId
   );
 
   return response
@@ -110,9 +111,11 @@ Instructions:
 - Keep the answer focused on the user's question.
 `;
 };
+
 const generateAndSaveAssistantMessageService = async (
   conversationId,
   userMessage,
+  userId,
   selectedModel,
   res,
   existingAssistantMessage = null,
@@ -161,10 +164,11 @@ const generateAndSaveAssistantMessageService = async (
       });
     }
   }
-  // Retrieve document context for Groq attachments
+
   if (userMessage.filePath && selectedModel === "groq") {
     const retrievedChunks = await getRelevantDocumentChunksService(
       userMessage.content,
+      userId,
       5,
     );
 
@@ -180,10 +184,11 @@ const generateAndSaveAssistantMessageService = async (
 
   if (conversationContext.length === 0)
     throw new Error("Conversation context is empty");
-  // Generate AI response
+
   const aiResponseText = await generateGeminiResponseWithTools(
     conversationContext,
     selectedModel,
+    userId
   );
 
   const assistantContent = await streamGeminiResponseService(
@@ -191,7 +196,6 @@ const generateAndSaveAssistantMessageService = async (
     res,
   );
 
-  // Update existing message or create a new one
   if (existingAssistantMessage) {
     const previousVersions =
       existingAssistantMessage.versions?.length > 0
@@ -215,6 +219,7 @@ const generateAndSaveAssistantMessageService = async (
     currentVersion: 0,
   });
 };
+
 export const createMessageService = async (
   conversationId,
   userId,
@@ -241,7 +246,7 @@ export const createMessageService = async (
     },
   });
   if (messageCount === 0 && content?.trim()) {
-    const title = await generateConversationTitle(content, selectedModel);
+    const title = await generateConversationTitle(content,selectedModel,userId);
 
     await conversation.update({ title });
   }
@@ -263,6 +268,7 @@ export const createMessageService = async (
   const assistantMessage = await generateAndSaveAssistantMessageService(
     conversationId,
     userMessage,
+    userId,
     selectedModel,
     res,
   );
@@ -349,6 +355,7 @@ export const regenerateMessageService = async ({
   return await generateAndSaveAssistantMessageService(
     conversationId,
     userMessage,
+    userId,
     selectedModel,
     res,
     assistantMessage,
