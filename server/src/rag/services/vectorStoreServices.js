@@ -1,9 +1,14 @@
-import { ChromaClient } from "chromadb";
+import { QdrantClient } from "@qdrant/js-client-rest";
 
-const chroma = new ChromaClient({
-  host: "localhost",
-  port: 8000,
-  ssl: false,
+export const COLLECTION_NAME = "chatDocuments";
+
+if (!process.env.QDRANT_URL || !process.env.QDRANT_API_KEY) {
+  throw new Error("Qdrant environment variables are missing");
+}
+
+const qdrant = new QdrantClient({
+  url: process.env.QDRANT_URL,
+  apiKey: process.env.QDRANT_API_KEY,
 });
 
 let documentCollection = null;
@@ -13,19 +18,31 @@ export const getDocumentCollectionService = async () => {
     return documentCollection;
   }
 
-  documentCollection = await chroma.getOrCreateCollection({
-    name: "chatDocuments",
-    embeddingFunction: null,
-    metadata: { "hnsw:space": "cosine" }
-  });
+  const collections = await qdrant.getCollections();
+
+  const collectionExists = collections.collections.some(
+    (collection) => collection.name === COLLECTION_NAME,
+  );
+
+  if (!collectionExists) {
+    await qdrant.createCollection(COLLECTION_NAME, {
+      vectors: {
+        size: 3072,
+        distance: "Cosine",
+      },
+    });
+
+    console.log("Qdrant collection created successfully.");
+  }
+
+  documentCollection = qdrant;
 
   return documentCollection;
 };
 
-export const checkChromaConnection = async () => {
-  await chroma.heartbeat();
-
-  console.log("ChromaDB connected successfully.");
+export const checkQdrantConnection = async () => {
+  await qdrant.getCollections();
+  console.log("Qdrant connected successfully.");
 };
 
-export default chroma;
+export default qdrant;

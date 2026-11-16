@@ -25,7 +25,7 @@ export const getDocumentsController = async (req, res) => {
 export const uploadDocumentController = async (req, res) => {
   try {
     if (!req.file) {
-      res.status(400).json({
+      return res.status(400).json({
         success: false,
         error: "Please select a PDF file",
       });

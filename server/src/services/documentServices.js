@@ -1,8 +1,11 @@
 import fs from "fs/promises";
 import Document from "../models/documentModel.js";
 
-import { storePDFInChromaService } from "../rag/services/documentServices.js";
-import { getDocumentCollectionService } from "../rag/services/vectorStoreServices.js";
+import { storePDFInQdrantService } from "../rag/services/documentServices.js";
+import {
+  getDocumentCollectionService,
+  COLLECTION_NAME,
+} from "../rag/services/vectorStoreServices.js";
 import { cleanPDFTextService } from "../rag/services/chunkServices.js";
 import { extractTextFromPDFService } from "../rag/services/pdfService.js";
 import { model } from "../config/langchain.js";
@@ -61,7 +64,7 @@ export const processDocumentService = async (documentId) => {
     const savedDocument = await Document.findByPk(documentId);
 
     console.log("Saved Document:", savedDocument.toJSON());
-    await storePDFInChromaService({
+    await storePDFInQdrantService({
       filePath: document.filePath,
       documentId: document.id,
       fileName: document.fileName,
@@ -85,26 +88,37 @@ export const deleteDocumentService = async (documentId, userId) => {
     },
   });
 
-  if (!document) throw new Error("Document not found");
-  const collection = await getDocumentCollectionService();
+  if (!document) {
+    throw new Error("Document not found");
+  }
 
-  const existingChunks = await collection.get({
-    where: {
-      $and: [{ documentId: String(documentId) }, { userId: String(userId) }],
+  const qdrant = await getDocumentCollectionService();
+
+  // Delete all chunks belonging to this user's document
+  await qdrant.delete(COLLECTION_NAME, {
+    filter: {
+      must: [
+        {
+          key: "documentId",
+          match: { value: String(documentId) },
+        },
+        {
+          key: "userId",
+          match: { value: String(userId) },
+        },
+      ],
     },
+    wait: true,
   });
 
-  if (existingChunks.ids.length > 0) {
-    await collection.delete({
-      ids: existingChunks.ids,
-    });
-  }
+  // Delete the original PDF
   await fs.unlink(document.filePath).catch((error) => {
     if (error.code !== "ENOENT") {
       throw error;
     }
   });
 
+  // Delete document record from MySQL
   await document.destroy();
 
   return { message: "Document deleted successfully" };

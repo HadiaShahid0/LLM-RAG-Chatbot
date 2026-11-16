@@ -1,37 +1,65 @@
+import { createHash } from "crypto";
+
 import { extractTextFromPDFService } from "./pdfService.js";
+
 import {
   splitTextIntoChunksService,
   cleanPDFTextService,
 } from "./chunkServices.js";
-import { generateDocumentEmbeddingService } from "./embeddingService.js";
-import { getDocumentCollectionService } from "./vectorStoreServices.js";
 
-export const storePDFInChromaService = async ({
+import { generateDocumentEmbeddingService } from "./embeddingService.js";
+
+import {
+  getDocumentCollectionService,
+  COLLECTION_NAME,
+} from "./vectorStoreServices.js";
+
+const generateChunkId = (documentId, index) => {
+  const hash = createHash("sha256")
+    .update(`${documentId}-${index}`)
+    .digest("hex");
+
+  return [
+    hash.slice(0, 8),
+    hash.slice(8, 12),
+    `5${hash.slice(13, 16)}`,
+    `a${hash.slice(17, 20)}`,
+    hash.slice(20, 32),
+  ].join("-");
+};
+
+export const storePDFInQdrantService = async ({
   filePath,
   documentId,
   fileName,
   userId,
 }) => {
-  if (!filePath || !documentId)
+  if (!filePath || !documentId || !userId) {
     throw new Error("Required document information is missing");
+  }
 
   console.log("Extracting PDF text...");
 
   const documents = await extractTextFromPDFService(filePath);
+
   console.log("PDF text extracted successfully");
+
   const cleanedDocuments = cleanPDFTextService(documents);
 
   console.log("PDF text cleaned successfully");
-  const chunks = await splitTextIntoChunksService(cleanedDocuments, 1000, 200);
-  console.log("Total Chunks: ", chunks.length);
 
-  if (!chunks.length) throw new Error("No Chunks Generated From PDF");
-  console.log("Total Chunks", chunks.length);
-  chunks.forEach((chunk, index) => {
-    console.log(`\n========== CHUNK ${index + 1} ==========`);
-    console.log(chunk.pageContent);
-    console.log("\nChunk length:", chunk.pageContent.length);
-  });
+  const chunks = await splitTextIntoChunksService(
+    cleanedDocuments,
+    1000,
+    200,
+  );
+
+  console.log("Total Chunks:", chunks.length);
+
+  if (!chunks.length) {
+    throw new Error("No Chunks Generated From PDF");
+  }
+
   const embeddings = [];
 
   for (let i = 0; i < chunks.length; i++) {
@@ -40,52 +68,76 @@ export const storePDFInChromaService = async ({
     const embedding = await generateDocumentEmbeddingService(
       chunks[i].pageContent,
     );
-    
+
     embeddings.push(embedding);
-    console.log(embedding);
   }
 
   const collection = await getDocumentCollectionService();
 
-  const ids = [];
-  for (let i = 0; i < chunks.length; i++) {
-    ids.push(`document=${documentId}-chunk-${i}`);
-  }
+  const points = chunks.map((chunk, index) => ({
+    id: generateChunkId(documentId, index),
 
-  const metadatas = chunks.map((chunk, index) => ({
-    documentId: String(documentId),
-    userId: String(userId),
-    fileName,
-    chunkIndex: index,
-    pageNumber: chunk.metadata?.loc?.pageNumber || 0,
-    scope: "user",
+    vector: embeddings[index],
+
+    payload: {
+      text: chunk.pageContent,
+      documentId: String(documentId),
+      userId: String(userId),
+      fileName,
+      chunkIndex: index,
+      pageNumber: chunk.metadata?.loc?.pageNumber || 0,
+      scope: "user",
+    },
   }));
 
-  const existingData = await collection.get({
-    where: {
-      documentId: String(documentId),
+  // Retrieve existing chunks for this document
+  const existingData = await collection.scroll(COLLECTION_NAME, {
+    filter: {
+      must: [
+        {
+          key: "documentId",
+          match: {
+            value: String(documentId),
+          },
+        },
+        {
+          key: "userId",
+          match: {
+            value: String(userId),
+          },
+        },
+      ],
     },
-    include: ["metadatas"],
+
+    limit: 10000,
+    with_payload: false,
+    with_vector: false,
   });
 
-  const texts = chunks.map((chunk) => chunk.pageContent);
-  await collection.upsert({
-    ids,
-    documents: texts,
-    embeddings,
-    metadatas,
+  // Store new chunks
+  await collection.upsert(COLLECTION_NAME, {
+    points,
+    wait: true,
   });
 
-  const newIds = new Set(ids);
+  // Delete obsolete chunks
+  const newIds = new Set(points.map((point) => point.id));
 
-  const obsoleteIds = existingData.ids.filter((id) => !newIds.has(id));
+  const obsoleteIds = existingData.points
+    .map((point) => point.id)
+    .filter((id) => !newIds.has(id));
 
   if (obsoleteIds.length > 0) {
-    await collection.delete({
-      ids: obsoleteIds,
+    await collection.delete(COLLECTION_NAME, {
+      points: obsoleteIds,
+      wait: true,
     });
   }
-  console.log("PDF chunks stored successfully in ChromaDB");
 
-  return { documentId, totalChunks: chunks.length };
+  console.log("PDF chunks stored successfully in Qdrant");
+
+  return {
+    documentId,
+    totalChunks: chunks.length,
+  };
 };
