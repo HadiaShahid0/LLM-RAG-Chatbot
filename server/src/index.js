@@ -43,3 +43,8 @@ const PORT = process.env.PORT || 5000;
 server.listen(PORT, () => {
   console.log(`Server running on ${PORT}`);
 });
+# DB_HOST=localhost
+# DB_PORT=3306
+# DB_USER=chatapp
+# DB_PASSWORD=1234
+# DB_NAME=ai_chatbot
