@@ -1,4 +1,4 @@
-const API_URL = "http://localhost:5000/api";
+const API_URL = "/api";
 
 export const getConversationsServices = async () => {
   const response = await fetch(`${API_URL}/conversations`, {
@@ -70,7 +70,7 @@ export const sendMessageServices = async (
     formData.append("file", file);
   }
 
-  const response = await fetch("http://localhost:5000/api/messages", {
+  const response = await fetch(`${API_URL}/messages`, {
     method: "POST",
     credentials: "include",
     body: formData,
