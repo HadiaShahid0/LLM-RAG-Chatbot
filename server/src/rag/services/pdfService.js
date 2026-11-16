@@ -1,3 +1,4 @@
+import { CanvasFactory } from "pdf-parse/worker";
 import { PDFParse } from "pdf-parse";
 
 export const extractTextFromPDFService = async (fileBuffer) => {
@@ -10,6 +11,7 @@ export const extractTextFromPDFService = async (fileBuffer) => {
 
     parser = new PDFParse({
       data: new Uint8Array(fileBuffer),
+      CanvasFactory,
     });
 
     const result = await parser.getText();
@@ -29,7 +31,7 @@ export const extractTextFromPDFService = async (fileBuffer) => {
       },
     ];
   } catch (error) {
-    console.error("PDF extraction failed:", error.message);
+    console.error("PDF extraction failed:", error);
     throw error;
   } finally {
     if (parser) {
