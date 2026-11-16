@@ -1,34 +1,51 @@
 import { generateQueryEmbeddingService } from "./embeddingService.js";
-import { getDocumentCollectionService } from "./vectorStoreServices.js";
+import {
+  getDocumentCollectionService,
+  COLLECTION_NAME,
+} from "./vectorStoreServices.js";
 
-export const retrieveRelevantChunksService = async ({ question, userId, topK = 5 }) => {
-  if (!question?.trim()) throw new Error("Question cannot be empty");
+export const retrieveRelevantChunksService = async ({
+  question,
+  userId,
+  topK = 5,
+}) => {
+  if (typeof question !== "string" || !question.trim()) {
+    throw new Error("Question cannot be empty");
+  }
 
-  if(!userId) throw new Error("Question cannot be empty")
+  if (!userId) {
+    throw new Error("User ID is required");
+  }
+
   const queryEmbedding = await generateQueryEmbeddingService(question);
+  const qdrant = await getDocumentCollectionService();
 
-  const collection = await getDocumentCollectionService();
-
-  const results = await collection.query({
-    queryEmbeddings: [queryEmbedding],
-    nResults: topK,
-    where: {
-      userId: String(userId)
+  const results = await qdrant.query(COLLECTION_NAME, {
+    query: queryEmbedding,
+    limit: topK,
+    filter: {
+      must: [
+        {
+          key: "userId",
+          match: { value: String(userId) },
+        },
+      ],
     },
+    with_payload: true,
   });
 
-  const ids = results.ids?.[0] || [];
-  const documents = results.documents?.[0] || [];
-  const metadatas = results.metadatas?.[0] || [];
-  const distances = results.distances?.[0] || [];
+  const retrievedChunks = (results.points || []).map((point) => {
+    const { text, ...metadata } = point.payload || {};
 
-  const retrievedChunks = documents.map((text, index) => ({
-    id: ids[index],
-    text,
-    metadata: metadatas[index],
-    distance: distances[index],
-  }));
-  console.log("\n========== VECTOR SEARCH RESULTS ==========");
+    return {
+      id: point.id,
+      text,
+      metadata,
+      score: point.score,
+    };
+  });
+
+  console.log("VECTOR SEARCH RESULTS");
   console.log("Question:", question);
   console.log("Retrieved chunks:", retrievedChunks.length);
 
@@ -36,7 +53,7 @@ export const retrieveRelevantChunksService = async ({ question, userId, topK = 5
     retrievedChunks.map((chunk, index) => ({
       rank: index + 1,
       id: chunk.id,
-      distance: chunk.distance,
+      score: chunk.score,
       fileName: chunk.metadata?.fileName,
     })),
   );

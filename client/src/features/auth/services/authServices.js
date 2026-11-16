@@ -1,5 +1,25 @@
 const API_URL = "/api";
+const handleResponse = async (response) => {
+  const text = await response.text();
 
+  let data = {};
+
+  if (text) {
+    try {
+      data = JSON.parse(text);
+    } catch {
+      throw new Error(
+        `Server returned invalid JSON. Status: ${response.status}. Response: ${text.slice(0, 200)}`,
+      );
+    }
+  }
+
+  if (!response.ok) {
+    throw new Error(data.error || `Request failed: ${response.status}`);
+  }
+
+  return data;
+};
 export const registerUser = async (userData) => {
   const response = await fetch(`${API_URL}/auth/register`, {
     method: "POST",
@@ -29,15 +49,25 @@ export const loginUser = async (loginData) => {
     body: JSON.stringify(loginData),
   });
 
-  const data = await response.json();
+  const text = await response.text();
+
+  console.log("Login status:", response.status);
+  console.log("Login response:", text);
+
+  let data = {};
+
+  try {
+    data = text ? JSON.parse(text) : {};
+  } catch {
+    throw new Error("Backend returned an invalid JSON response");
+  }
 
   if (!response.ok) {
-    throw new Error(data.error || "Login failed");
+    throw new Error(data.error || data.message || "Login failed");
   }
 
   return data;
 };
-
 export const logoutUser = async () => {
   const response = await fetch(`${API_URL}/auth/logout`, {
     method: "POST",
