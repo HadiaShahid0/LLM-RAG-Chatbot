@@ -33,7 +33,7 @@
     "jsonwebtoken": "^9.0.3",
     "langchain": "^1.6.4",
     "multer": "^2.4.0",
-    "mysql2": "^3.24.5",
+    "mysql2": "^3.24.6",
     "natural": "^8.1.2",
     "pdf-parse": "^2.4.5",
     "sequelize": "^6.37.8",
