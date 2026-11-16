@@ -10,6 +10,8 @@ import { cleanPDFTextService } from "../rag/services/chunkServices.js";
 import { extractTextFromPDFService } from "../rag/services/pdfService.js";
 import { model } from "../config/langchain.js";
 import { searchDocuments } from "../tools/toolRegistoery.js";
+
+import supabase, {BUCKET_NAME} from "../config/supabase.js";
 export const getDocumentsService = async (userId) => {
   return await Document.findAll({
     where: { userId },
@@ -32,53 +34,57 @@ export const processDocumentService = async (documentId) => {
   if (!document) throw new Error("Document not found");
 
   try {
-    await document.update(
-      { status: "processing" },
-      { where: { id: documentId } },
-    );
-    const extractedDocuments = await extractTextFromPDFService(
-      document.filePath,
-    );
+    await document.update({ status: "processing" });
 
-    const cleanedDocuments = cleanPDFTextService(extractedDocuments);
+    // Download PDF from Supabase Storage
+    const { data, error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .download(document.filePath);
+
+    if (error) throw error;
+
+    const fileBuffer = Buffer.from(await data.arrayBuffer());
+
+    // Extract PDF text
+    const extractedDocuments =
+      await extractTextFromPDFService(fileBuffer);
+
+    const cleanedDocuments =
+      cleanPDFTextService(extractedDocuments);
 
     const fullText = cleanedDocuments
       .map((item) => item.pageContent)
       .join("\n");
 
-    const metadata = await generateDocumentMetadataService(fullText);
-    console.log("Generated Metadata:", metadata);
+    // Generate summary and topics
+    const metadata =
+      await generateDocumentMetadataService(fullText);
 
-    const [updatedRows] = await Document.update(
-      {
-        summary: metadata.summary,
-        topics: metadata.topics,
-      },
-      {
-        where: { id: documentId },
-      },
-    );
+    await document.update({
+      summary: metadata.summary,
+      topics: metadata.topics,
+    });
 
-    console.log("Updated Rows:", updatedRows);
-
-    const savedDocument = await Document.findByPk(documentId);
-
-    console.log("Saved Document:", savedDocument.toJSON());
+    // Store extracted PDF chunks in Qdrant
     await storePDFInQdrantService({
-      filePath: document.filePath,
+      extractedDocuments,
       documentId: document.id,
       fileName: document.fileName,
       userId: document.userId,
     });
 
     await document.update({ status: "completed" });
+
+    console.log("Document processing completed:", documentId);
   } catch (error) {
-    console.error("PDF processing failed: ", error);
+    console.error("PDF processing failed:", error);
 
     await document.update({ status: "failed" });
+
     throw error;
   }
 };
+
 
 export const deleteDocumentService = async (documentId, userId) => {
   const document = await Document.findOne({
@@ -94,7 +100,7 @@ export const deleteDocumentService = async (documentId, userId) => {
 
   const qdrant = await getDocumentCollectionService();
 
-  // Delete all chunks belonging to this user's document
+  // Delete PDF chunks from Qdrant
   await qdrant.delete(COLLECTION_NAME, {
     filter: {
       must: [
@@ -111,17 +117,21 @@ export const deleteDocumentService = async (documentId, userId) => {
     wait: true,
   });
 
-  // Delete the original PDF
-  await fs.unlink(document.filePath).catch((error) => {
-    if (error.code !== "ENOENT") {
-      throw error;
-    }
-  });
+  // Delete original PDF from Supabase
+  const { error } = await supabase.storage
+    .from(BUCKET_NAME)
+    .remove([document.filePath]);
 
-  // Delete document record from MySQL
+  if (error) {
+    throw error;
+  }
+
+  // Delete document record from TiDB
   await document.destroy();
 
-  return { message: "Document deleted successfully" };
+  return {
+    message: "Document deleted successfully",
+  };
 };
 
 export const generateDocumentMetadataService = async (text) => {

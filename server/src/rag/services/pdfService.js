@@ -1,23 +1,36 @@
-import {PDFLoader} from "@langchain/community/document_loaders/fs/pdf";
+import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
 
-export const extractTextFromPDFService = async (filePath) => {
+export const extractTextFromPDFService = async (fileBuffer) => {
   try {
-    const loader = new PDFLoader(filePath)
-    
-    const documents=await loader.load()
-    
-    if(!documents.length) throw new Error("No content found in the PDF.");
+    if (!fileBuffer) {
+      throw new Error("PDF file buffer is required");
+    }
 
-    const extractedText=documents.map((document)=> document.pageContent).join("\n")
+    const pdfBlob = new Blob([fileBuffer], {
+      type: "application/pdf",
+    });
 
-    if (!extractedText.trim())
+    const loader = new PDFLoader(pdfBlob);
+
+    const documents = await loader.load();
+
+    if (!documents.length) {
+      throw new Error("No content found in the PDF.");
+    }
+
+    const extractedText = documents
+      .map((document) => document.pageContent)
+      .join("\n");
+
+    if (!extractedText.trim()) {
       throw new Error(
         "No text found in the PDF. It may be scanned or image-based",
       );
+    }
 
-    return documents;                                          
-  } catch (err) {
-    console.error("PDF extraction failed: ", err.message);
-    throw err;
+    return documents;
+  } catch (error) {
+    console.error("PDF extraction failed:", error.message);
+    throw error;
   }
 };
