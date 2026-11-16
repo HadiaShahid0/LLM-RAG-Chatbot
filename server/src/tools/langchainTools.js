@@ -4,38 +4,32 @@ import { z } from "zod";
 import { searchDocuments } from "./toolRegistoery.js";
 import { searchWikipedia } from "./toolService.js";
 
-export const createLangChainTools = (userId, citations = []) => {
-  return [
-    tool(
-      async ({ question }) => {
-        const results = await searchDocuments({ question, userId });
+export const createLangChainTools = (
+  userId,
+  citations = [],
+  includeDocumentSearch = true,
+) => {
+  const tools = [];
 
-        return JSON.stringify(results);
-      },
-      {
-        name: "searchDocuments",
-        description: `
-Search the authenticated user's uploaded PDF documents.
+  if (includeDocumentSearch) {
+    tools.push(
+      tool(
+        async ({ question }) => {
+          const results = await searchDocuments({ question, userId });
+          return JSON.stringify(results);
+        },
+        {
+          name: "searchDocuments",
+          description: "Search the authenticated user's uploaded PDFs.",
+          schema: z.object({
+            question: z.string(),
+          }),
+        },
+      ),
+    );
+  }
 
-Use this tool when:
-- The user asks questions about uploaded documents.
-- The user asks for explanations or summaries of uploaded PDFs.
-- The user asks to compare information from uploaded documents.
-- The user asks follow-up questions about information in uploaded PDFs.
-- The user asks whether a particular topic or detail exists in their documents.
-
-Search using a complete, meaningful question.
-Only use the returned results as evidence for document-specific answers.
-`,
-        schema: z.object({
-          question: z
-            .string()
-            .describe("The question to search for in uploaded documents."),
-        }),
-      },
-    ),
-
-    // Search Wikipedia
+  tools.push(
     tool(
       async ({ topic }) => {
         const results = await searchWikipedia({ topic });
@@ -51,12 +45,13 @@ Only use the returned results as evidence for document-specific answers.
       },
       {
         name: "searchWikipedia",
-        description:
-          "Search Wikipedia for background information about a topic.",
+        description: "Search Wikipedia for background information.",
         schema: z.object({
-          topic: z.string().describe("The topic to search for."),
+          topic: z.string(),
         }),
       },
     ),
-  ];
+  );
+
+  return tools;
 };

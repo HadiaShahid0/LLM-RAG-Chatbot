@@ -15,9 +15,9 @@ import {
 
 import { uploadFileToGemini } from "./geminiServices.js";
 
-import { generateGeminiResponseWithTools } from "../agents/langchainAgent.js";    
+import { generateGeminiResponseWithTools } from "../agents/langchainAgent.js";
 import { getRelevantDocumentChunksService } from "../tools/toolService.js";
-const generateConversationTitle = async (content, selectedModel,userId) => {
+const generateConversationTitle = async (content, selectedModel, userId) => {
   const response = await generateGeminiResponseWithTools(
     [
       {
@@ -38,7 +38,7 @@ User message: ${content}`,
       },
     ],
     selectedModel,
-    userId
+    userId,
   );
 
   return response
@@ -188,7 +188,7 @@ const generateAndSaveAssistantMessageService = async (
   const aiResponseText = await generateGeminiResponseWithTools(
     conversationContext,
     selectedModel,
-    userId
+    userId,
   );
 
   const assistantContent = await streamGeminiResponseService(
@@ -246,7 +246,11 @@ export const createMessageService = async (
     },
   });
   if (messageCount === 0 && content?.trim()) {
-    const title = await generateConversationTitle(content,selectedModel,userId);
+    const title = await generateConversationTitle(
+      content,
+      selectedModel,
+      userId,
+    );
 
     await conversation.update({ title });
   }
