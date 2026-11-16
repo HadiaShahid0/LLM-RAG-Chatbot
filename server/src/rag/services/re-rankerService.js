@@ -1,7 +1,10 @@
 import {
+  env,
   AutoTokenizer,
   AutoModelForSequenceClassification,
 } from "@huggingface/transformers";
+
+env.cacheDir = "/tmp/huggingface-cache";
 
 let tokenizer;
 let rerankerModel;
@@ -9,7 +12,9 @@ let rerankerModel;
 const loadRerankerModel = async () => {
   if (!tokenizer || !rerankerModel) {
     const modelName = "Xenova/ms-marco-MiniLM-L-6-v2";
+
     tokenizer = await AutoTokenizer.from_pretrained(modelName);
+
     rerankerModel =
       await AutoModelForSequenceClassification.from_pretrained(modelName);
   }
@@ -17,10 +22,15 @@ const loadRerankerModel = async () => {
   return { tokenizer, rerankerModel };
 };
 
-export const rerankChunksService = async ({ question, chunks, topK = 7 }) => {
-  if (!question || !question.trim())
+export const rerankChunksService = async ({
+  question,
+  chunks,
+  topK = 7,
+}) => {
+  if (!question || !question.trim()) {
     throw new Error("Question cannot be empty");
-  
+  }
+
   if (!chunks || chunks.length === 0) return [];
 
   const { tokenizer, rerankerModel } = await loadRerankerModel();
@@ -37,16 +47,15 @@ export const rerankChunksService = async ({ question, chunks, topK = 7 }) => {
   const result = await rerankerModel(inputs);
   const scores = Array.from(result.logits.data);
 
-  const chunksWithScores = chunks.map((chunk, index) => {
-    return {
-      ...chunk,
-      rerankScore: scores[index],
-    };
-  });
+  const chunksWithScores = chunks.map((chunk, index) => ({
+    ...chunk,
+    rerankScore: scores[index],
+  }));
 
-  chunksWithScores.sort((chunkA, chunkB) => {
-    return chunkB.rerankScore - chunkA.rerankScore;
-  });
+  chunksWithScores.sort(
+    (chunkA, chunkB) => chunkB.rerankScore - chunkA.rerankScore,
+  );
+
   console.log("\n========== RERANKING RESULTS ==========");
 
   console.table(

@@ -164,11 +164,45 @@ export const getConversationContextService = async (
 
 export const deleteConversationService = async (userId, conversationId) => {
   const conversation = await Conversation.findOne({
-    where: { id: conversationId, userId },
+    where: {
+      id: conversationId,
+      userId,
+    },
   });
-  if (!conversation) throw new Error("Conversation not found");
 
-  conversation.destroy();
+  if (!conversation) {
+    throw new Error("Conversation not found");
+  }
 
-  return { message: "Conversation deleted successfully" };
+  // Get uploaded file paths from conversation messages
+  const messages = await Message.findAll({
+    where: { conversationId },
+    attributes: ["filePath"],
+  });
+
+  const storagePaths = [
+    ...new Set(
+      messages
+        .map((message) => message.filePath)
+        .filter(Boolean),
+    ),
+  ];
+
+  // Delete uploaded files from Supabase Storage
+  if (storagePaths.length > 0) {
+    const { error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .remove(storagePaths);
+
+    if (error) {
+      throw new Error(`Supabase deletion failed: ${error.message}`);
+    }
+  }
+
+  // Delete conversation from database
+  await conversation.destroy();
+
+  return {
+    message: "Conversation deleted successfully",
+  };
 };

@@ -1,6 +1,7 @@
 import Message from "../models/messageModel.js";
 import Conversation from "../models/conversationModel.js";
 import { Op } from "sequelize";
+import { randomUUID } from "crypto";
 
 import {
   validateUserInputService,
@@ -237,7 +238,9 @@ export const createMessageService = async (
     },
   });
 
-  if (!conversation) throw new Error("Conversation not found.");
+  if (!conversation) {
+    throw new Error("Conversation not found.");
+  }
 
   const messageCount = await Message.count({
     where: {
@@ -245,6 +248,7 @@ export const createMessageService = async (
       role: "user",
     },
   });
+
   if (messageCount === 0 && content?.trim()) {
     const title = await generateConversationTitle(
       content,
@@ -254,74 +258,101 @@ export const createMessageService = async (
 
     await conversation.update({ title });
   }
+
+  let storagePath = null;
   let uploadedFile = null;
 
-  if (file && selectedModel === "gemini")
-    uploadedFile = await uploadFileToGemini(file);
+  // Upload attachment to Supabase Storage
+  if (file) {
+    if (!file.buffer) {
+      throw new Error("Uploaded file buffer is missing");
+    }
 
-  const userMessage = await Message.create({
-    conversationId,
-    role: "user",
-    content: content ?? "",
-    fileName: file?.originalname || null,
-    fileType: file?.mimetype || null,
-    fileSize: file?.size || null,
-    filePath: file?.path || null,
-    geminiFileUri: uploadedFile?.uri || null,
-  });
-  const assistantMessage = await generateAndSaveAssistantMessageService(
-    conversationId,
-    userMessage,
-    userId,
-    selectedModel,
-    res,
-  );
-  // const retrievedChunks = await getRelevantDocumentChunksService(
-  //   content ?? "",
-  //   5,
-  // );
+    const safeFileName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
 
-  // const documentContext = buildDocumentContextService(retrievedChunks);
+    storagePath = `${userId}/${conversationId}/${randomUUID()}-${safeFileName}`;
 
-  // if (documentContext) {
-  //   conversationContext.push({
-  //     role: "user",
-  //     parts: [{ text: documentContext }],
-  //   });
-  // }
+    const { error } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(storagePath, file.buffer, {
+        contentType: file.mimetype,
+        upsert: false,
+      });
 
-  // const aiResponse= await generateGeminiResponseStream(conversationContext, res);
-
-  const lastSummarizedMessageId = conversation.lastSummarizedMessageId || 0;
-
-  const unsummarizedCount = await Message.count({
-    where: {
-      conversationId,
-      id: {
-        [Op.gt]: lastSummarizedMessageId,
-      },
-    },
-  });
-
-  if (unsummarizedCount >= 5) {
-    updateConversationSummaryService(conversationId).catch((error) => {
-      console.error("Summary update failed:", error);
-    });
+    if (error) {
+      throw new Error(`Supabase upload failed: ${error.message}`);
+    }
   }
 
-  return {
-    userMessage,
-    assistantMessage,
-    attachment: uploadedFile
-      ? {
-          fileName: file.originalname,
-          fileType: file.mimetype,
-          fileSize: file.size,
-          filePath: file.path,
-          geminiFileUri: uploadedFile.uri,
-        }
-      : null,
-  };
+  try {
+    // Upload attachment to Gemini when Gemini is selected
+    if (file && selectedModel === "gemini") {
+      uploadedFile = await uploadFileToGemini(file);
+    }
+
+    const userMessage = await Message.create({
+      conversationId,
+      role: "user",
+      content: content ?? "",
+      fileName: file?.originalname || null,
+      fileType: file?.mimetype || null,
+      fileSize: file?.size || null,
+      filePath: storagePath,
+      geminiFileUri: uploadedFile?.uri || null,
+    });
+
+    const assistantMessage = await generateAndSaveAssistantMessageService(
+      conversationId,
+      userMessage,
+      userId,
+      selectedModel,
+      res,
+    );
+
+    const lastSummarizedMessageId = conversation.lastSummarizedMessageId || 0;
+
+    const unsummarizedCount = await Message.count({
+      where: {
+        conversationId,
+        id: {
+          [Op.gt]: lastSummarizedMessageId,
+        },
+      },
+    });
+
+    if (unsummarizedCount >= 5) {
+      updateConversationSummaryService(conversationId).catch((error) => {
+        console.error("Summary update failed:", error);
+      });
+    }
+
+    return {
+      userMessage,
+      assistantMessage,
+      attachment: file
+        ? {
+            fileName: file.originalname,
+            fileType: file.mimetype,
+            fileSize: file.size,
+            filePath: storagePath,
+            geminiFileUri: uploadedFile?.uri || null,
+          }
+        : null,
+    };
+  } catch (error) {
+    // Remove uploaded file if message creation or processing fails
+    if (storagePath) {
+      const { error: deleteError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .remove([storagePath]);
+
+      if (deleteError) {
+        console.error("Supabase cleanup failed:", deleteError.message);
+      }
+    }
+
+    throw error;
+  }
 };
 
 export const regenerateMessageService = async ({
