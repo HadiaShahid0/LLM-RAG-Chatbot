@@ -1,20 +1,8 @@
 import { Sequelize } from "sequelize";
 import mysql2 from "mysql2";
 import dotenv from "dotenv";
-import fs from "fs";
 
 dotenv.config();
-
-const sslOptions =
-  process.env.DB_SSL === "true"
-    ? {
-        minVersion: "TLSv1.2",
-        rejectUnauthorized: true,
-        ca: process.env.DB_CA_PATH
-          ? fs.readFileSync(process.env.DB_CA_PATH)
-          : undefined,
-      }
-    : undefined;
 
 const db = new Sequelize(
   process.env.DB_NAME,
@@ -26,7 +14,10 @@ const db = new Sequelize(
     dialect: "mysql",
     dialectModule: mysql2,
     dialectOptions: {
-      ssl: sslOptions,
+      ssl: {
+        minVersion: "TLSv1.2",
+        rejectUnauthorized: true,
+      },
     },
     logging: false,
   },
