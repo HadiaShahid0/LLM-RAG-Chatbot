@@ -13,6 +13,7 @@ const Document = Sequelize.define(
       type: DataTypes.INTEGER,
       allowNull: false,
     },
+
     fileName: {
       type: DataTypes.STRING,
       allowNull: false,
@@ -27,6 +28,17 @@ const Document = Sequelize.define(
       allowNull: false,
     },
 
+    summary: {
+      type: DataTypes.TEXT,
+      allowNull: true,
+    },
+
+    topics: {
+      type: DataTypes.JSON,
+      allowNull: true,
+      defaultValue: [],
+    },
+    
     status: {
       type: DataTypes.ENUM("processing", "completed", "failed"),
       defaultValue: "processing",

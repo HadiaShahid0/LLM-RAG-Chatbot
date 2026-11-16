@@ -40,6 +40,7 @@ export const storePDFInChromaService = async ({
     const embedding = await generateDocumentEmbeddingService(
       chunks[i].pageContent,
     );
+    
     embeddings.push(embedding);
     console.log(embedding);
   }

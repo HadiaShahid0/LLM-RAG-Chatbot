@@ -16,6 +16,17 @@ export const searchWikipedia = async ({ topic }) => {
 };
 
 export const getRelevantDocumentChunksService = async (question, userId, topK = 5) => {
+  if (typeof question !== "string") {
+    if (Array.isArray(question)) {
+      question = question
+        .map((item) =>
+          typeof item === "string" ? item : item.text || "",
+        )
+        .join(" ");
+    } else {
+      question = question?.text || question?.content || "";
+    }
+  }
   if (!question?.trim()) return [];
   if(!userId) throw new Error("user Id is required for document Retrieval")
   try {
