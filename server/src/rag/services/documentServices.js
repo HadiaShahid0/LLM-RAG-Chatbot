@@ -29,18 +29,20 @@ const generateChunkId = (documentId, index) => {
 };
 
 export const storePDFInQdrantService = async ({
-  filePath,
+  fileBuffer,
+  extractedDocuments,
   documentId,
   fileName,
   userId,
 }) => {
-  if (!filePath || !documentId || !userId) {
+  if ((!fileBuffer && !extractedDocuments) || !documentId || !userId) {
     throw new Error("Required document information is missing");
   }
 
   console.log("Extracting PDF text...");
 
-  const documents = await extractTextFromPDFService(filePath);
+  const documents =
+    extractedDocuments || (await extractTextFromPDFService(fileBuffer));
 
   console.log("PDF text extracted successfully");
 
@@ -48,11 +50,7 @@ export const storePDFInQdrantService = async ({
 
   console.log("PDF text cleaned successfully");
 
-  const chunks = await splitTextIntoChunksService(
-    cleanedDocuments,
-    1000,
-    200,
-  );
+  const chunks = await splitTextIntoChunksService(cleanedDocuments, 1000, 200);
 
   console.log("Total Chunks:", chunks.length);
 
