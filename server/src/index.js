@@ -1,45 +1,68 @@
+import "dotenv/config";
+
 import express from "express";
-import http from "http";
 import cors from "cors";
 import cookieParser from "cookie-parser";
-import routes from "./routes/index.js";
 
+import routes from "./routes/index.js";
 import "./models/index.js";
+
 import sequelize from "./config/db.js";
-import { initializeHybridSearchService } from "./rag/services/initializeService.js";
-import dotenv from "dotenv";
-dotenv.config();
+
 const app = express();
 
-try {
-  await sequelize.authenticate();
-
-  console.log("MySQL connected successfully.");
-
-  await sequelize.sync();
-
-  console.log("Database synchronized.");
-} catch (error) {
-  console.error("Database connection failed:", error);
-}
-const server = http.createServer(app);
-await initializeHybridSearchService();
-
 app.use(express.json());
-
 app.use(cookieParser());
 
 app.use(
   cors({
-    origin: "http://localhost:5173",
+    origin: process.env.CLIENT_URL || "http://localhost:5173",
     credentials: true,
   }),
 );
 
+// Connect to MySQL before handling API requests
+let dbConnection;
+
+app.use("/api", async (req, res, next) => {
+  try {
+    if (!dbConnection) {
+      dbConnection = sequelize.authenticate().catch((error) => {
+        dbConnection = null;
+        throw error;
+      });
+    }
+
+    await dbConnection;
+    next();
+  } catch (error) {
+    console.error("Database connection failed:", error);
+
+    res.status(503).json({
+      message: "Database connection failed",
+    });
+  }
+});
+
 app.use("/api", routes);
 
-const PORT = process.env.PORT || 5000;
+// Local development only
+if (!process.env.VERCEL) {
+  const PORT = process.env.PORT || 5000;
 
-server.listen(PORT, () => {
-  console.log(`Server running on ${PORT}`);
-});
+  try {
+    await sequelize.authenticate();
+    await sequelize.sync();
+
+    console.log("MySQL connected successfully.");
+    console.log("Database synchronized.");
+
+    app.listen(PORT, () => {
+      console.log(`Server running on port ${PORT}`);
+    });
+  } catch (error) {
+    console.error("Server startup failed:", error);
+  }
+}
+
+export default app;
