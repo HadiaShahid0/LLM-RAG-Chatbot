@@ -1,36 +1,39 @@
-import { PDFLoader } from "@langchain/community/document_loaders/fs/pdf";
+import { PDFParse } from "pdf-parse";
 
 export const extractTextFromPDFService = async (fileBuffer) => {
+  let parser;
+
   try {
     if (!fileBuffer) {
       throw new Error("PDF file buffer is required");
     }
 
-    const pdfBlob = new Blob([fileBuffer], {
-      type: "application/pdf",
+    parser = new PDFParse({
+      data: new Uint8Array(fileBuffer),
     });
 
-    const loader = new PDFLoader(pdfBlob);
+    const result = await parser.getText();
 
-    const documents = await loader.load();
-
-    if (!documents.length) {
-      throw new Error("No content found in the PDF.");
-    }
-
-    const extractedText = documents
-      .map((document) => document.pageContent)
-      .join("\n");
-
-    if (!extractedText.trim()) {
+    if (!result.text?.trim()) {
       throw new Error(
-        "No text found in the PDF. It may be scanned or image-based",
+        "No text found in the PDF. It may be scanned or image-based.",
       );
     }
 
-    return documents;
+    return [
+      {
+        pageContent: result.text,
+        metadata: {
+          source: "uploaded-pdf",
+        },
+      },
+    ];
   } catch (error) {
     console.error("PDF extraction failed:", error.message);
     throw error;
+  } finally {
+    if (parser) {
+      await parser.destroy();
+    }
   }
 };
