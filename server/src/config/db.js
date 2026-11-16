@@ -1,25 +1,19 @@
-// import { Sequelize } from "sequelize";
-// import dotenv from "dotenv";
-// dotenv.config();
-
-// const db = new Sequelize(
-//   process.env.DB_NAME,
-//   process.env.DB_USER,
-//   process.env.DB_PASSWORD,
-//   {
-//     host: process.env.DB_HOST,
-//     dialect: "mysql",
-//   },
-// );
-
-// export default db;
-
 import { Sequelize } from "sequelize";
 import dotenv from "dotenv";
+import fs from "fs";
 
 dotenv.config();
 
-const isProduction = process.env.NODE_ENV === "production";
+const sslOptions =
+  process.env.DB_SSL === "true"
+    ? {
+        minVersion: "TLSv1.2",
+        rejectUnauthorized: true,
+        ca: process.env.DB_CA_PATH
+          ? fs.readFileSync(process.env.DB_CA_PATH)
+          : undefined,
+      }
+    : undefined;
 
 const db = new Sequelize(
   process.env.DB_NAME,
@@ -27,19 +21,11 @@ const db = new Sequelize(
   process.env.DB_PASSWORD,
   {
     host: process.env.DB_HOST,
-    port: Number(process.env.DB_PORT) || (isProduction ? 4000 : 3306),
+    port: Number(process.env.DB_PORT) || 4000,
     dialect: "mysql",
-
     dialectOptions: {
-      ssl:
-        process.env.DB_SSL === "true"
-          ? {
-              minVersion: "TLSv1.2",
-              rejectUnauthorized: true,
-            }
-          : undefined,
+      ssl: sslOptions,
     },
-
     logging: false,
   },
 );
