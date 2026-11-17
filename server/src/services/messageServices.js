@@ -18,6 +18,7 @@ import { uploadFileToGemini } from "./geminiServices.js";
 
 import { generateGeminiResponseWithTools } from "../agents/langchainAgent.js";
 import { getRelevantDocumentChunksService } from "../tools/toolService.js";
+
 const generateConversationTitle = async (content, selectedModel, userId) => {
   const response = await generateGeminiResponseWithTools(
     [
