@@ -1,6 +1,5 @@
-import fs from "fs/promises";
 import Document from "../models/documentModel.js";
-
+import { Op } from "sequelize";
 import { storePDFInQdrantService } from "../rag/services/documentServices.js";
 import {
   getDocumentCollectionService,
@@ -10,15 +9,29 @@ import { cleanPDFTextService } from "../rag/services/chunkServices.js";
 import { extractTextFromPDFService } from "../rag/services/pdfService.js";
 import { model } from "../config/langchain.js";
 import { searchDocuments } from "../tools/toolRegistoery.js";
+import { getAuthorizedDocumentIdsService } from "./documentPermissionService.js";
+import supabase, { BUCKET_NAME } from "../config/supabase.js";
+import TenantMember from "../models/tenantMemberModel.js";
 
-import supabase, {BUCKET_NAME} from "../config/supabase.js";
-export const getDocumentsService = async (userId) => {
-  return await Document.findAll({
-    where: { userId },
+export const getDocumentsService = async (userId, tenantId) => {
+  const allowedDocumentIds = await getAuthorizedDocumentIdsService(
+    userId,
+    tenantId,
+  );
+
+  if (!allowedDocumentIds.length) return [];
+
+  const documents = await Document.findAll({
+    where: {
+      id: { [Op.in]: allowedDocumentIds },
+      tenantId,
+    },
     attributes: [
       "id",
+      "userId",
       "fileName",
       "fileSize",
+      "visibility",
       "status",
       "summary",
       "topics",
@@ -26,17 +39,26 @@ export const getDocumentsService = async (userId) => {
     ],
     order: [["createdAt", "DESC"]],
   });
+
+  return documents.map((doc) => ({
+    ...doc.toJSON(),
+    isOwner: String(doc.userId) === String(userId),
+  }));
 };
 
-export const processDocumentService = async (documentId) => {
-  const document = await Document.findByPk(documentId);
+export const processDocumentService = async (documentId, tenantId) => {
+  const document = await Document.findOne({
+    where: {
+      id: documentId,
+      tenantId,
+    },
+  });
 
   if (!document) throw new Error("Document not found");
 
   try {
     await document.update({ status: "processing" });
 
-    // Download PDF from Supabase Storage
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
       .download(document.filePath);
@@ -46,29 +68,26 @@ export const processDocumentService = async (documentId) => {
     const fileBuffer = Buffer.from(await data.arrayBuffer());
 
     // Extract PDF text
-    const extractedDocuments =
-      await extractTextFromPDFService(fileBuffer);
+    const extractedDocuments = await extractTextFromPDFService(fileBuffer);
 
-    const cleanedDocuments =
-      cleanPDFTextService(extractedDocuments);
+    const cleanedDocuments = cleanPDFTextService(extractedDocuments);
 
     const fullText = cleanedDocuments
       .map((item) => item.pageContent)
       .join("\n");
 
     // Generate summary and topics
-    const metadata =
-      await generateDocumentMetadataService(fullText);
+    const metadata = await generateDocumentMetadataService(fullText);
 
     await document.update({
       summary: metadata.summary,
       topics: metadata.topics,
     });
 
-    // Store extracted PDF chunks in Qdrant
     await storePDFInQdrantService({
       extractedDocuments,
       documentId: document.id,
+      tenantId,
       fileName: document.fileName,
       userId: document.userId,
     });
@@ -85,12 +104,25 @@ export const processDocumentService = async (documentId) => {
   }
 };
 
+export const deleteDocumentService = async (documentId, userId, tenantId) => {
+  // Verify workspace membership
+  const membership = await TenantMember.findOne({
+    where: {
+      userId,
+      tenantId,
+      status: "active",
+    },
+  });
 
-export const deleteDocumentService = async (documentId, userId) => {
+  if (!membership) {
+    throw new Error("You are not authorized to access this workspace");
+  }
+
+  // Find document inside the current tenant
   const document = await Document.findOne({
     where: {
       id: documentId,
-      userId,
+      tenantId,
     },
   });
 
@@ -98,9 +130,17 @@ export const deleteDocumentService = async (documentId, userId) => {
     throw new Error("Document not found");
   }
 
+  // Employees can delete only their own documents
+  if (
+    membership.role !== "admin" &&
+    String(document.userId) !== String(userId)
+  ) {
+    throw new Error("You are not authorized to delete this document");
+  }
+
   const qdrant = await getDocumentCollectionService();
 
-  // Delete PDF chunks from Qdrant
+  // Delete document chunks from Qdrant
   await qdrant.delete(COLLECTION_NAME, {
     filter: {
       must: [
@@ -109,24 +149,22 @@ export const deleteDocumentService = async (documentId, userId) => {
           match: { value: String(documentId) },
         },
         {
-          key: "userId",
-          match: { value: String(userId) },
+          key: "tenantId",
+          match: { value: String(tenantId) },
         },
       ],
     },
     wait: true,
   });
 
-  // Delete original PDF from Supabase
+  // Delete PDF from Supabase Storage
   const { error } = await supabase.storage
     .from(BUCKET_NAME)
     .remove([document.filePath]);
 
-  if (error) {
-    throw error;
-  }
+  if (error) throw error;
 
-  // Delete document record from TiDB
+  // Delete database record
   await document.destroy();
 
   return {
@@ -168,8 +206,8 @@ ${text.slice(0, 15000)}
   return JSON.parse(cleanedContent);
 };
 
-export const getDocumentCatalogService = async (userId) => {
-  const documents = await getDocumentsService(userId);
+export const getDocumentCatalogService = async (userId, tenantId) => {
+  const documents = await getDocumentsService(userId, tenantId);
   return documents
     .filter((document) => document.status === "completed")
     .map((document) => ({
@@ -183,9 +221,10 @@ export const getDocumentCatalogService = async (userId) => {
 export const routeDocumentQuestionService = async (
   question,
   userId,
+  tenantId,
   conversationContext = "",
 ) => {
-  const documents = await getDocumentCatalogService(userId);
+  const documents = await getDocumentCatalogService(userId, tenantId);
   if (Array.isArray(question)) {
     question = question.map((item) => item.text || "").join("\n");
   }
@@ -300,16 +339,21 @@ Return ONLY valid JSON. Do not include explanations.
 export const retrieveDocumentContextService = async (
   question,
   userId,
+  tenantId,
   conversationContext = "",
 ) => {
+  if (!userId || !tenantId)
+    throw new Error("User Id and TenantId are required");
+
   const shouldSearchDocuments = await routeDocumentQuestionService(
     question,
     userId,
+    tenantId,
     conversationContext,
   );
-
   console.log("========== DOCUMENT ROUTING ==========");
   console.log("Question:", question);
+  console.log("Tenant Id:", tenantId);
   console.log("Search Documents:", shouldSearchDocuments);
 
   if (!shouldSearchDocuments) {
@@ -326,6 +370,7 @@ export const retrieveDocumentContextService = async (
   const results = await searchDocuments({
     question,
     userId,
+    tenantId,
   });
 
   console.log("Retrieved Results:", results);

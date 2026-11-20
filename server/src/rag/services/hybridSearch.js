@@ -3,14 +3,21 @@ import { retrieveRelevantChunksService } from "./retrievalService.js";
 
 const K = 60;
 
-export const hybridSearchService = async ({ question, userId, topK = 5 }) => {
+export const hybridSearchService = async ({ question, tenantId,allowedDocumentIds, topK = 5 }) => {
   if (!question.trim()) throw new Error("Question cannot be empty");
-  if(!userId) throw new Error("User Id is required")
+
+  if (!tenantId) throw new Error("User Id is required");
+
+  if(!Array.isArray(allowedDocumentIds)) throw new Error("Authorized document Ids are required")
+  
+  if(allowedDocumentIds.length===0) return []
+
   const [keywordResults, vectorResults] = await Promise.all([
-    searchKeywordChunksService(question, userId, topK * 2),
+    searchKeywordChunksService(question, tenantId, allowedDocumentIds, topK * 2),
     retrieveRelevantChunksService({
       question,
-      userId,
+      tenantId,
+      allowedDocumentIds,
       topK: topK * 2,
     }),
   ]);
@@ -43,6 +50,7 @@ export const hybridSearchService = async ({ question, userId, topK = 5 }) => {
       };
 
       if (!fusedItem.text && item.text) fusedItem.text = item.text;
+
       if (searchType === "vector") {
         fusedItem.vectorRank = rank;
       } else {

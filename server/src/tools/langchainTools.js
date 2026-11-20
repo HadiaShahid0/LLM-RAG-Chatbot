@@ -6,6 +6,7 @@ import { searchWikipedia } from "./toolService.js";
 
 export const createLangChainTools = (
   userId,
+  tenantId,
   citations = [],
   includeDocumentSearch = true,
 ) => {
@@ -15,12 +16,12 @@ export const createLangChainTools = (
     tools.push(
       tool(
         async ({ question }) => {
-          const results = await searchDocuments({ question, userId });
+          const results = await searchDocuments({ question, userId ,tenantId});
           return JSON.stringify(results);
         },
         {
           name: "searchDocuments",
-          description: "Search the authenticated user's uploaded PDFs.",
+          description: "Search the authenticated user's is authorized to access",
           schema: z.object({
             question: z.string(),
           }),

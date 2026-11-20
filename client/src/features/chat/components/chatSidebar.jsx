@@ -1,60 +1,102 @@
 import {
   FiPlus,
   FiMessageSquare,
-  FiStar,
   FiChevronRight,
   FiLogOut,
   FiTrash2,
+  FiFileText,
+  FiUsers,
+  FiMail,
+  FiRepeat,
+  FiBriefcase,
+  FiShield,
+  FiUser,
   FiX,
-  FiFileText
 } from "react-icons/fi";
+
 const ChatSidebar = ({
-  conversations,
+  conversations = [],
   activeConversationId,
   onSelectConversation,
   onNewChat,
   onLogout,
   onDeleteConversation,
+  onOpenDocuments,
+  onOpenEmployees,
+  onOpenInvitations,
+  onSwitchCompany,
   onCloseSidebar,
-  onOpenDocuments
+  companyName = "My Company",
+  isAdmin = false,
 }) => {
-  const handleDelete=(e,conversationId)=>{
-    e.stopPropagation()
-    onDeleteConversation(conversationId)
-  }
+  const handleDelete = (e, conversationId) => {
+    e.stopPropagation();
+    onDeleteConversation(conversationId);
+  };
 
- return (
-    <aside className="chat-sidebar ">
-      {/* Sidebar Header */}
-      <div className="sidebar-brand">
-        <div className="brand-left p-2">
-          <div className="brand-icon">
-            <FiStar size={19} />
+  return (
+    <aside className="chat-sidebar">
+      {/* Company Workspace */}
+      <div className="px-3 py-3 border-bottom">
+        <div className="d-flex align-items-center justify-content-between mb-2">
+          <div className="d-flex align-items-center gap-2">
+            <FiBriefcase size={17} className="text-primary" />
+
+            <small className="text-muted fw-semibold">COMPANY WORKSPACE</small>
           </div>
 
-          <div>
-            <h5>AI Chat</h5>
-            <small>Your AI workspace</small>
-          </div>
+          <button
+            type="button"
+            className="btn btn-sm border-0"
+            onClick={onCloseSidebar}
+            title="Close sidebar"
+            aria-label="Close sidebar"
+          >
+            <FiX size={20} />
+          </button>
         </div>
 
-        <button
-          type="button"
-          className="sidebar-close-btn"
-          onClick={onCloseSidebar}
-          title="Close sidebar"
-        >
-          <FiX size={20} />
-        </button>
+        <div className="d-flex align-items-center justify-content-between gap-2">
+          <div className="text-truncate">
+            <div className="fw-semibold text-truncate" title={companyName}>
+              {companyName}
+            </div>
+          </div>
+
+          <span
+            className={`badge rounded-pill ${
+              isAdmin
+                ? "bg-primary bg-opacity-10 text-white"
+                : "bg-success bg-opacity-10 text-white"
+            }`}
+          >
+            {isAdmin ? (
+              <FiShield size={12} className="me-1" />
+            ) : (
+              <FiUser size={12} className="me-1" />
+            )}
+
+            {isAdmin ? "Admin" : "Employee"}
+          </span>
+        </div>
+
+        {/* Switch Company - Employees Only */}
+        {!isAdmin && (
+          <button
+            type="button"
+            className="btn btn-outline-primary btn-sm w-100 mt-3 d-flex align-items-center justify-content-center gap-2"
+            onClick={onSwitchCompany}
+          >
+            <FiRepeat size={15} />
+            Switch Company
+          </button>
+        )}
       </div>
 
-      {/* New Chat Button */}
+      {/* Sidebar Navigation */}
       <div className="new-chat-wrapper">
-        <button
-          type="button"
-          className="new-chat-btn"
-          onClick={onNewChat}
-        >
+        {/* New Chat */}
+        <button type="button" className="new-chat-btn" onClick={onNewChat}>
           <span className="new-chat-icon">
             <FiPlus size={18} />
           </span>
@@ -63,11 +105,44 @@ const ChatSidebar = ({
 
           <FiChevronRight size={17} className="ms-auto" />
         </button>
-        <button type="button" className="documents-btn" onClick={onOpenDocuments}>
-          <FiFileText size={18}/>
+
+        {/* Documents */}
+        <button
+          type="button"
+          className="documents-btn"
+          onClick={onOpenDocuments}
+        >
+          <FiFileText size={18} />
           <span>Documents</span>
-          <FiChevronRight size ={17} className="ms-auto"/>
+          <FiChevronRight size={17} className="ms-auto" />
         </button>
+
+        {/* Admin Navigation */}
+        {isAdmin && (
+          <>
+            {/* Employees */}
+            <button
+              type="button"
+              className="documents-btn"
+              onClick={onOpenEmployees}
+            >
+              <FiUsers size={18} />
+              <span>Employees</span>
+              <FiChevronRight size={17} className="ms-auto" />
+            </button>
+
+            {/* Team Invitations */}
+            <button
+              type="button"
+              className="documents-btn"
+              onClick={onOpenInvitations}
+            >
+              <FiMail size={18} />
+              <span>Team Invitations</span>
+              <FiChevronRight size={17} className="ms-auto" />
+            </button>
+          </>
+        )}
       </div>
 
       {/* Conversation List */}
@@ -75,9 +150,7 @@ const ChatSidebar = ({
         <div className="conversation-heading">
           <span>Recent conversations</span>
 
-          <span className="conversation-count">
-            {conversations.length}
-          </span>
+          <span className="conversation-count">{conversations.length}</span>
         </div>
 
         <div className="conversation-list">
@@ -126,10 +199,7 @@ const ChatSidebar = ({
                 </button>
 
                 {activeConversationId === conversation.id && (
-                  <FiChevronRight
-                    size={15}
-                    className="conversation-arrow"
-                  />
+                  <FiChevronRight size={15} className="conversation-arrow" />
                 )}
               </div>
             ))
@@ -141,7 +211,7 @@ const ChatSidebar = ({
       <div className="sidebar-footer">
         <div className="assistant-status">
           <div className="assistant-status-icon">
-            <FiStar size={16} />
+            <FiBriefcase size={16} />
           </div>
 
           <div className="assistant-status-text">

@@ -6,16 +6,19 @@ import {
 
 export const retrieveRelevantChunksService = async ({
   question,
-  userId,
+  tenantId,
+  allowedDocumentIds,
   topK = 5,
 }) => {
-  if (typeof question !== "string" || !question.trim()) {
+  if (!question.trim())
     throw new Error("Question cannot be empty");
-  }
 
-  if (!userId) {
-    throw new Error("User ID is required");
-  }
+  if (!tenantId) throw new Error("Tenant ID is required");
+
+
+  if(!Array.isArray(allowedDocumentIds)) throw new Error("Authorized document Ids are required")
+
+  if(allowedDocumentIds.length===0) return []
 
   const queryEmbedding = await generateQueryEmbeddingService(question);
   const qdrant = await getDocumentCollectionService();
@@ -26,9 +29,15 @@ export const retrieveRelevantChunksService = async ({
     filter: {
       must: [
         {
-          key: "userId",
-          match: { value: String(userId) },
+          key: "tenantId",
+          match: { value: String(tenantId) },
         },
+        {
+          key: "documentId",
+          match:{
+            any:allowedDocumentIds.map(String)
+          }
+        }
       ],
     },
     with_payload: true,
@@ -55,6 +64,7 @@ export const retrieveRelevantChunksService = async ({
       id: chunk.id,
       score: chunk.score,
       fileName: chunk.metadata?.fileName,
+      tenantId:chunk.metadata?.tenantId,
     })),
   );
 

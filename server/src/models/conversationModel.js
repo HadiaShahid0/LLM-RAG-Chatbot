@@ -9,7 +9,10 @@ const Conversation = db.define(
       primaryKey: true,
       autoIncrement: true,
     },
-
+    tenantId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
     userId: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -29,21 +32,11 @@ const Conversation = db.define(
       type: DataTypes.INTEGER,
       allowNull: true,
     },
-
-    createdAt: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-    },
-
-    updatedAt: {
-      type: DataTypes.DATE,
-      defaultValue: DataTypes.NOW,
-    },
   },
   {
     tableName: "conversations",
     timestamps: true,
-  }
+  },
 );
 
 export default Conversation;

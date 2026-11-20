@@ -12,6 +12,7 @@ export const createMessage = async (req, res) => {
     await createMessageService(
       conversationId,
       req.user.id,
+      req.tenant.id,
       content,
       req.file,
       model,
@@ -39,6 +40,7 @@ export const regenerateMessage = async (req, res) => {
     await regenerateMessageService({
       conversationId,
       userId: req.user.id,
+      tenantId: req.tenant.id,
       messageId,
       selectedModel: model,
       res,
@@ -58,10 +60,12 @@ export const regenerateMessage = async (req, res) => {
 export const getMessagesByConversationId = async (req, res) => {
   const conversationId = req.params.conversationId;
   const userId = req.user.id;
+  const tenantId = req.tenant.id;
   try {
     const messages = await getMessagesByConversationIdService(
       conversationId,
       userId,
+      tenantId,
     );
     res
       .status(200)
@@ -76,8 +80,9 @@ export const getMessagesByConversationId = async (req, res) => {
 export const getMessageById = async (req, res) => {
   const messageId = req.params.messageId;
   const userId = req.user.id;
+  const tenantId = req.tenant.id;
   try {
-    const message = await getMessageByIdService(messageId, userId);
+    const message = await getMessageByIdService(messageId, userId, tenantId);
     res.status(200).json({ message: "Message fetched successfully", message });
   } catch (err) {
     res

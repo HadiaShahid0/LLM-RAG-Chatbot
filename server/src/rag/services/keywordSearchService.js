@@ -40,48 +40,54 @@ const createKeywordIndex = (chunks) => {
 export const buildKeywordIndexService = (chunks) => {
   keywordIndexes.clear();
 
-  const chunksByUser = new Map();
+  const chunksByTenant = new Map();
 
   chunks.forEach((chunk) => {
-    const userId = String(chunk.metadata?.userId || "");
+    const tenantId = String(chunk.metadata?.tenantId || "");
 
-    if (!userId) {
-      console.warn("Chunk is missing userId:", chunk.id);
+    if (!tenantId) {
+      console.warn("Chunk is missing tenantId:", chunk.id);
       return;
     }
 
-    if (!chunksByUser.has(userId)) {
-      chunksByUser.set(userId, []);
-    }
+    if (!chunksByTenant.has(tenantId)) chunksByTenant.set(tenantId, []);
 
-    chunksByUser.get(userId).push(chunk);
+    chunksByTenant.get(tenantId).push(chunk);
   });
 
-  chunksByUser.forEach((userChunks, userId) => {
-    const keywordIndex = createKeywordIndex(userChunks);
+  chunksByTenant.forEach((tenantChunks, tenantId) => {
+    const keywordIndex = createKeywordIndex(tenantChunks);
 
-    keywordIndexes.set(userId, keywordIndex);
+    keywordIndexes.set(tenantId, keywordIndex);
 
-    console.log(`BM25 indexed ${userChunks.length} chunks for user ${userId}`);
+    console.log(
+      `BM25 indexed ${tenantChunks.length} chunks for user ${tenantId}`,
+    );
   });
 };
 
-export const searchKeywordChunksService = (question, userId, topK = 7) => {
+export const searchKeywordChunksService = (
+  question,
+  tenantId,
+  allowedDocumentIds,
+  topK = 7,
+) => {
   if (!question?.trim()) return [];
 
-  if (!userId) {
-    throw new Error("User ID is required");
-  }
+  if (!tenantId) throw new Error("User ID is required");
 
-  const userIndex = keywordIndexes.get(String(userId));
+  if (!Array.isArray(allowedDocumentIds))
+    throw new Error("Authorized Ids are required");
 
-  if (!userIndex) {
-    return [];
-  }
+  const tenantIndex = keywordIndexes.get(String(tenantId));
 
-  const { engine, chunksById } = userIndex;
+  if (!tenantIndex) return [];
 
-  const results = engine.search(question, topK);
+  const { engine, chunksById } = tenantIndex;
+
+  const allowedIds = new Set(allowedDocumentIds.map(String));
+
+  const results = engine.search(question, chunksById.size);
 
   const keywordResults = results
     .map(([id, score]) => {
@@ -89,28 +95,20 @@ export const searchKeywordChunksService = (question, userId, topK = 7) => {
 
       if (!chunk) return null;
 
+      if (!allowedIds.has(String(chunk.metadata?.documentId))) return null;
+
       return {
         ...chunk,
         keywordScore: score,
       };
     })
-    .filter(Boolean);
+    .filter(Boolean)
+    .slice(0, topK);
 
   console.log("\n========== BM25 KEYWORD SEARCH ==========");
-  console.log("User ID:", userId);
-  console.log("Question:", question);
-  console.log("Requested topK:", topK);
+  console.log("Tenant ID:", tenantId);
+  console.log("Authorized documents:", allowedIds.size);
   console.log("Results found:", keywordResults.length);
-
-  console.table(
-    keywordResults.map((chunk, index) => ({
-      rank: index + 1,
-      id: chunk.id,
-      keywordScore: chunk.keywordScore,
-      fileName: chunk.metadata?.fileName,
-      chunkIndex: chunk.metadata?.chunkIndex,
-    })),
-  );
 
   return keywordResults;
 };

@@ -36,12 +36,13 @@ export const getDocumentCollectionService = async () => {
   }
 
   // Create payload indexes for filtered fields
-  const indexFields = ["userId", "documentId", "scope"];
+  const indexFields = ["userId", "tenantId", "documentId", "scope"];
 
   for (const field of indexFields) {
     await qdrant.createPayloadIndex(COLLECTION_NAME, {
       field_name: field,
       field_schema: "keyword",
+      wait: true,
     });
   }
 

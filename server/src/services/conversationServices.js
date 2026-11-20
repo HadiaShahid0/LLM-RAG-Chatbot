@@ -1,21 +1,25 @@
 import { Message, Conversation } from "../models/index.js";
-import User from "../models/userModel.js";
 import { model } from "../config/langchain.js";
 import { Op } from "sequelize";
+import supabase, { BUCKET_NAME } from "../config/supabase.js";
 
-export const createConversationService = async (userId, title) => {
+// Create conversation
+export const createConversationService = async (userId, tenantId, title) => {
   const conversation = await Conversation.create({
     userId,
+    tenantId,
     title: title || "New Chat",
   });
 
   return conversation;
 };
 
-export const getUserConversationsService = async (userId) => {
+// Get conversations belonging to the user in the active tenant
+export const getUserConversationsService = async (userId, tenantId) => {
   const conversations = await Conversation.findAll({
     where: {
       userId,
+      tenantId,
     },
     order: [["updatedAt", "DESC"]],
   });
@@ -23,11 +27,17 @@ export const getUserConversationsService = async (userId) => {
   return conversations;
 };
 
-export const getConversationService = async (conversationId, userId) => {
+// Get one conversation
+export const getConversationService = async (
+  conversationId,
+  userId,
+  tenantId,
+) => {
   const conversation = await Conversation.findOne({
     where: {
       id: conversationId,
       userId,
+      tenantId,
     },
   });
 
@@ -38,10 +48,23 @@ export const getConversationService = async (conversationId, userId) => {
   return conversation;
 };
 
-export const updateConversationSummaryService = async (conversationId) => {
-  const conversation = await Conversation.findByPk(conversationId);
+// Update conversation summary
+export const updateConversationSummaryService = async (
+  conversationId,
+  userId,
+  tenantId,
+) => {
+  const conversation = await Conversation.findOne({
+    where: {
+      id: conversationId,
+      userId,
+      tenantId,
+    },
+  });
 
-  if (!conversation) throw new Error("Conversation not found");
+  if (!conversation) {
+    throw new Error("Conversation not found");
+  }
 
   const whereCondition = { conversationId };
 
@@ -56,12 +79,13 @@ export const updateConversationSummaryService = async (conversationId) => {
     order: [["createdAt", "ASC"]],
   });
 
-  if (!messages.length) return conversation.summary || "";
+  if (!messages.length) {
+    return conversation.summary || "";
+  }
 
   const conversationText = messages
     .map((message) => {
       const role = message.role === "user" ? "User" : "Assistant";
-
       return `${role}: ${message.content}`;
     })
     .join("\n");
@@ -86,9 +110,10 @@ Keep:
 - Important facts
 - Ongoing tasks
 
-Do not invent information. keep the wording simple and summary short.
+Do not invent information. Keep the wording simple and the summary short.
 Return only the updated summary, without headings or additional explanations.
 `;
+
   const summaryResponse = await model.invoke(prompt);
 
   const summaryText =
@@ -109,13 +134,24 @@ Return only the updated summary, without headings or additional explanations.
   return summaryText;
 };
 
+// Get conversation context for AI
 export const getConversationContextService = async (
   conversationId,
+  userId,
   beforeMessageId = null,
+  tenantId,
 ) => {
-  const conversation = await Conversation.findByPk(conversationId);
+  const conversation = await Conversation.findOne({
+    where: {
+      id: conversationId,
+      userId,
+      tenantId,
+    },
+  });
 
-  if (!conversation) throw new Error("Conversation not found");
+  if (!conversation) {
+    throw new Error("Conversation not found");
+  }
 
   const where = { conversationId };
 
@@ -156,17 +192,24 @@ export const getConversationContextService = async (
       parts,
     };
   });
+
   return {
     summary: conversation.summary || "",
     recentContext,
   };
 };
 
-export const deleteConversationService = async (userId, conversationId) => {
+// Delete conversation
+export const deleteConversationService = async (
+  userId,
+  conversationId,
+  tenantId,
+) => {
   const conversation = await Conversation.findOne({
     where: {
       id: conversationId,
       userId,
+      tenantId,
     },
   });
 
@@ -174,7 +217,7 @@ export const deleteConversationService = async (userId, conversationId) => {
     throw new Error("Conversation not found");
   }
 
-  // Get uploaded file paths from conversation messages
+  // Get attachment paths belonging to this conversation
   const messages = await Message.findAll({
     where: { conversationId },
     attributes: ["filePath"],
@@ -182,13 +225,11 @@ export const deleteConversationService = async (userId, conversationId) => {
 
   const storagePaths = [
     ...new Set(
-      messages
-        .map((message) => message.filePath)
-        .filter(Boolean),
+      messages.map((message) => message.filePath).filter(Boolean),
     ),
   ];
 
-  // Delete uploaded files from Supabase Storage
+  // Delete attachments from Supabase Storage
   if (storagePaths.length > 0) {
     const { error } = await supabase.storage
       .from(BUCKET_NAME)
@@ -199,7 +240,7 @@ export const deleteConversationService = async (userId, conversationId) => {
     }
   }
 
-  // Delete conversation from database
+  // Delete conversation
   await conversation.destroy();
 
   return {

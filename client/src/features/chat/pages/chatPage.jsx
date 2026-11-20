@@ -15,9 +15,9 @@ import MessageList from "../components/messageList";
 import MessageInput from "../components/messageInput";
 import DocumentsPage from "./documentPage";
 import "./chatPage.css";
-
+import EmployeesPage from "./employeePage.jsx";
 import { FiMenu } from "react-icons/fi";
-
+import { TeamInvitationsPage } from "../../invitation/page/teamInvitationsPage.jsx";
 import {
   getDocumentsService,
   uploadDocumentService,
@@ -36,7 +36,10 @@ const ChatPage = () => {
   const [documents, setDocuments] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [currentPage, setCurrentPage] = useState("chat");
-
+  const [activeTenant, setActiveTenant] = useState(() => {
+    const savedTenant = localStorage.getItem("activeTenant");
+    return savedTenant ? JSON.parse(savedTenant) : null;
+  });
   const abortControllerRef = useRef(null);
 
   useEffect(() => {
@@ -89,14 +92,13 @@ const ChatPage = () => {
       const conversation = await createConversationServices();
 
       setConversations((previous) => [conversation, ...previous]);
-
       setActiveConversationId(conversation.id);
       setMessages([]);
+      setCurrentPage("chat");
     } catch (error) {
       console.error(error);
     }
   };
-
   const handleSelectConversation = async (conversationId) => {
     setActiveConversationId(conversationId);
 
@@ -297,48 +299,52 @@ const ChatPage = () => {
     }
   };
 
-  const handleDocumentUpload = async (files) => {
+  const handleDocumentUpload = async (files, accessSettings) => {
     setUploading(true);
+
     try {
       for (const file of files) {
-        const document = await uploadDocumentService(file);
-        setDocuments((prev) => [document, ...prev]);
+        await uploadDocumentService(file, accessSettings);
+
+        // Refresh immediately after each file is uploaded.
+        await loadDocuments();
       }
     } catch (error) {
-      console.error("Document upload error: ", error);
-      alert(error.message);
+      console.error("Document upload error:", error);
+      throw error;
     } finally {
       setUploading(false);
+      await loadDocuments();
     }
   };
-
-  const handleDocumentDelete = async (documentId) => {
+  const handleDelete = async (documentId) => {
     const confirmed = window.confirm(
       "Are you sure you want to delete this document",
     );
     if (!confirmed) return;
     try {
-      await deleteDocumentService(documentId)
+      await deleteDocumentService(documentId);
       setDocuments((prev) => prev.filter((doc) => doc.id !== documentId));
     } catch (error) {
       console.error("Document delete error: ", error);
     }
   };
   useEffect(() => {
-  if (currentPage !== "documents") return;
+    if (currentPage !== "documents") return;
 
-  loadDocuments();
-}, [currentPage]);
-
-useEffect(() => {
-  if (currentPage !== "documents") return;
-
-  const interval = setInterval(() => {
+    // Fetch immediately when the Documents tab opens.
     loadDocuments();
-  }, 3000);
 
-  return () => clearInterval(interval);
-}, [currentPage]);
+    // Keep refreshing to detect status changes.
+    const interval = setInterval(() => {
+      loadDocuments();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [currentPage]);
+  const handleOpenEmployees = () => {
+    setCurrentPage("employees");
+  };
   if (initialLoading) {
     return (
       <div className="chat-loading vh-100 d-flex align-items-center justify-content-center">
@@ -372,6 +378,13 @@ useEffect(() => {
           onDeleteConversation={handleDeleteConversation}
           onCloseSidebar={() => setSidebarOpen(false)}
           onOpenDocuments={() => setCurrentPage("documents")}
+          onOpenEmployees={handleOpenEmployees}
+          onOpenInvitations={() => setCurrentPage("invitations")}
+          companyName={
+            JSON.parse(localStorage.getItem("activeTenant") || "{}").name
+          }
+          isAdmin={activeTenant?.role === "admin"}
+          onSwitchCompany={() => navigate("/select-tenant")}
         />
       )}
 
@@ -390,16 +403,19 @@ useEffect(() => {
           </button>
         )}
 
-        {/* Documents Page */}
         {currentPage === "documents" ? (
           <DocumentsPage
             documents={documents}
             onUpload={handleDocumentUpload}
-            onDelete={handleDocumentDelete}
+            onDelete={handleDelete}
             uploading={uploading}
+            isAdmin={activeTenant?.role === "admin"}
           />
+        ) : currentPage === "employees" ? (
+          <EmployeesPage isAdmin={activeTenant?.role === "admin"} />
+        ) : currentPage === "invitations" ? (
+          <TeamInvitationsPage isAdmin={activeTenant?.role === "admin"} />
         ) : (
-          /* Chat Page */
           <>
             <div className="chat-messages">
               <MessageList

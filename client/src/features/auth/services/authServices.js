@@ -30,13 +30,7 @@ export const registerUser = async (userData) => {
     body: JSON.stringify(userData),
   });
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || "Registration failed");
-  }
-
-  return data;
+  return handleResponse(response);
 };
 
 export const loginUser = async (loginData) => {
@@ -49,24 +43,7 @@ export const loginUser = async (loginData) => {
     body: JSON.stringify(loginData),
   });
 
-  const text = await response.text();
-
-  console.log("Login status:", response.status);
-  console.log("Login response:", text);
-
-  let data = {};
-
-  try {
-    data = text ? JSON.parse(text) : {};
-  } catch {
-    throw new Error("Backend returned an invalid JSON response");
-  }
-
-  if (!response.ok) {
-    throw new Error(data.error || data.message || "Login failed");
-  }
-
-  return data;
+  return handleResponse(response);
 };
 export const logoutUser = async () => {
   const response = await fetch(`${API_URL}/auth/logout`, {
@@ -74,13 +51,7 @@ export const logoutUser = async () => {
     credentials: "include",
   });
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || "Logout failed");
-  }
-
-  return data;
+  return handleResponse(response);
 };
 
 export const verifyUser = async () => {
@@ -88,11 +59,5 @@ export const verifyUser = async () => {
     credentials: "include",
   });
 
-  const data = await response.json();
-
-  if (!response.ok) {
-    throw new Error(data.error || "Authentication failed");
-  }
-
-  return data;
+  return handleResponse(response);
 };

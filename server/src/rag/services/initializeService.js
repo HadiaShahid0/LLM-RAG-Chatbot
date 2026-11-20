@@ -1,4 +1,7 @@
-import { getDocumentCollectionService, COLLECTION_NAME } from "./vectorStoreServices.js";
+import {
+  getDocumentCollectionService,
+  COLLECTION_NAME,
+} from "./vectorStoreServices.js";
 import { buildKeywordIndexService } from "./keywordSearchService.js";
 
 export const initializeHybridSearchService = async () => {
@@ -10,30 +13,18 @@ export const initializeHybridSearchService = async () => {
     let offset = null;
     const chunks = [];
 
-    // Retrieve all stored document chunks
     do {
       const storedDocuments = await qdrant.scroll(COLLECTION_NAME, {
         limit: 100,
         offset,
         with_payload: true,
         with_vector: false,
-
-        filter: {
-          must: [
-            {
-              key: "scope",
-              match: {
-                value: "user",
-              },
-            },
-          ],
-        },
       });
 
       storedDocuments.points.forEach((point) => {
         const { text, ...metadata } = point.payload || {};
 
-        if (text && metadata.userId) {
+        if (text && metadata.tenantId && metadata.documentId) {
           chunks.push({
             id: point.id,
             text,
@@ -47,9 +38,7 @@ export const initializeHybridSearchService = async () => {
 
     buildKeywordIndexService(chunks);
 
-    console.log(
-      `BM25 keyword index initialized with ${chunks.length} chunks`,
-    );
+    console.log(`BM25 keyword index initialized with ${chunks.length} chunks`);
   } catch (error) {
     console.log("Failed to initialize BM25 keyword index", error);
     throw error;

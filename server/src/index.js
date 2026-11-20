@@ -18,10 +18,10 @@ app.use(
   cors({
     origin: process.env.CLIENT_URL || "http://localhost:5173",
     credentials: true,
-  }),
+  })
 );
 
-// Connect to MySQL before handling API requests
+// Database connection
 let dbConnection;
 
 app.use("/api", async (req, res, next) => {
@@ -46,12 +46,14 @@ app.use("/api", async (req, res, next) => {
 
 app.use("/api", routes);
 
-// Local development only
+// Local development
 if (!process.env.VERCEL) {
   const PORT = process.env.PORT || 5000;
 
   try {
     await sequelize.authenticate();
+
+    // Development only: use alter only when safe for existing data
     await sequelize.sync();
 
     console.log("MySQL connected successfully.");
