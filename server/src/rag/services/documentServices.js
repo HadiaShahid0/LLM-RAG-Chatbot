@@ -34,10 +34,15 @@ export const storePDFInQdrantService = async ({
   documentId,
   fileName,
   userId,
+  tenantId,
 }) => {
-  if ((!fileBuffer && !extractedDocuments) || !documentId || !userId) {
+  if (
+    (!fileBuffer && !extractedDocuments) ||
+    !documentId ||
+    !userId ||
+    !tenantId
+  )
     throw new Error("Required document information is missing");
-  }
 
   console.log("Extracting PDF text...");
 
@@ -45,18 +50,15 @@ export const storePDFInQdrantService = async ({
     extractedDocuments || (await extractTextFromPDFService(fileBuffer));
 
   console.log("PDF text extracted successfully");
+  console.log("Extracted text length:", documents[0]?.pageContent?.length);
 
   const cleanedDocuments = cleanPDFTextService(documents);
 
-  console.log("PDF text cleaned successfully");
+  console.log("Cleaned text length:", cleanedDocuments[0]?.pageContent?.length);
 
   const chunks = await splitTextIntoChunksService(cleanedDocuments, 1000, 200);
 
-  console.log("Total Chunks:", chunks.length);
-
-  if (!chunks.length) {
-    throw new Error("No Chunks Generated From PDF");
-  }
+  if (!chunks.length) throw new Error("No Chunks Generated From PDF");
 
   const embeddings = [];
 
@@ -80,11 +82,12 @@ export const storePDFInQdrantService = async ({
     payload: {
       text: chunk.pageContent,
       documentId: String(documentId),
+      tenantId: String(tenantId),
       userId: String(userId),
       fileName,
       chunkIndex: index,
       pageNumber: chunk.metadata?.loc?.pageNumber || 0,
-      scope: "user",
+      scope: "tenant",
     },
   }));
 
@@ -99,9 +102,9 @@ export const storePDFInQdrantService = async ({
           },
         },
         {
-          key: "userId",
+          key: "tenantId",
           match: {
-            value: String(userId),
+            value: String(tenantId),
           },
         },
       ],
@@ -136,6 +139,7 @@ export const storePDFInQdrantService = async ({
 
   return {
     documentId,
+    tenantId,
     totalChunks: chunks.length,
   };
 };

@@ -9,6 +9,11 @@ const Document = Sequelize.define(
       primaryKey: true,
       autoIncrement: true,
     },
+    tenantId: {
+      type: DataTypes.INTEGER,
+      allowNull: false,
+    },
+
     userId: {
       type: DataTypes.INTEGER,
       allowNull: false,
@@ -38,7 +43,11 @@ const Document = Sequelize.define(
       allowNull: true,
       defaultValue: [],
     },
-    
+    visibility: {
+      type: DataTypes.ENUM("private", "employee", "admin", "selected"),
+      allowNull: false,
+      defaultValue: "private",
+    },
     status: {
       type: DataTypes.ENUM("processing", "completed", "failed"),
       defaultValue: "processing",

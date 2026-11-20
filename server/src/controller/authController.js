@@ -6,12 +6,19 @@ import {
 } from "../services/authServices.js";
 
 export const registerUser = async (req, res) => {
-  const { username, email, password } = req.body;
+  const { username, email, password, companyName } = req.body;
   try {
-    const newUser = await registerUserService(username, email, password);
-    res
-      .status(201)
-      .json({ message: "User registered successfully", user: newUser });
+    const newUser = await registerUserService(
+      username,
+      email,
+      password,
+      companyName,
+    );
+    res.status(201).json({
+      message: "User registered successfully",
+      user: newUser.user,
+      tenant: newUser.tenant,
+    });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }
@@ -27,9 +34,14 @@ export const loginUser = async (req, res) => {
       sameSite: "strict",
       maxAge: 24 * 60 * 60 * 1000,
     });
-    res
-      .status(200)
-      .json({ message: "User logged in successfully", user, token });
+    res.status(200).json({
+      message: "User logged in successfully",
+      user: {
+        id: user.id,
+        username: user.username,
+        email: user.email,
+      },
+    });
   } catch (error) {
     res.status(400).json({ error: error.message });
   }

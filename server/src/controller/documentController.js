@@ -1,6 +1,6 @@
-import path from "path";
 import Document from "../models/documentModel.js";
-
+import DocumentPermission from "../models/documentPermissionModel.js";
+import TenantMember from "../models/tenantMemberModel.js";
 import {
   getDocumentsService,
   processDocumentService,
@@ -9,10 +9,9 @@ import {
 import { randomUUID } from "crypto";
 import supabase, { BUCKET_NAME } from "../config/supabase.js";
 
-
 export const getDocumentsController = async (req, res) => {
   try {
-    const documents = await getDocumentsService(req.user.id);
+    const documents = await getDocumentsService(req.user.id, req.tenant.id);
     res.status(200).json({
       success: true,
       documents,
@@ -25,11 +24,9 @@ export const getDocumentsController = async (req, res) => {
   }
 };
 
-
-
 export const uploadDocumentController = async (req, res) => {
   let storagePath;
-  let uploaded = false;
+  let document;
 
   try {
     if (!req.file) {
@@ -39,10 +36,91 @@ export const uploadDocumentController = async (req, res) => {
       });
     }
 
-    // Create a unique storage path for each user's PDF
-    storagePath = `${req.user.id}/${randomUUID()}.pdf`;
+    // Verify active workspace membership
+    const membership = await TenantMember.findOne({
+      where: {
+        userId: req.user.id,
+        tenantId: req.tenant.id,
+        status: "active",
+      },
+    });
 
-    // Upload PDF to Supabase Storage
+    if (!membership) {
+      return res.status(403).json({
+        success: false,
+        error: "You are not authorized to upload documents",
+      });
+    }
+
+    const visibility = req.body.visibility || "private";
+    const allowedVisibility = ["private", "employee", "admin", "selected"];
+
+    if (!allowedVisibility.includes(visibility)) {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid document visibility",
+      });
+    }
+    let permissions = [];
+
+    try {
+      permissions = req.body.permissions
+        ? JSON.parse(req.body.permissions)
+        : [];
+    } catch {
+      return res.status(400).json({
+        success: false,
+        error: "Invalid permissions format",
+      });
+    }
+
+    if (!Array.isArray(permissions)) {
+      return res.status(400).json({
+        success: false,
+        error: "Permissions must be an array",
+      });
+    }
+
+    if (visibility === "selected") {
+      if (!permissions.length) {
+        return res.status(400).json({
+          success: false,
+          error: "Please select at least one employee",
+        });
+      }
+      const userIds = permissions.map(Number);
+
+      if (
+        userIds.some((id) => !Number.isInteger(id) || id <= 0) ||
+        new Set(userIds).size !== userIds.length
+      ) {
+        return res.status(400).json({
+          success: false,
+          error: "Invalid or duplicate employee IDs",
+        });
+      }
+
+      const members = await TenantMember.findAll({
+        where: {
+          tenantId: req.tenant.id,
+          userId: userIds,
+          role: "employee",
+          status: "active",
+        },
+      });
+
+      if (members.length !== userIds.length) {
+        return res.status(400).json({
+          success: false,
+          error: "One or more selected employees are invalid",
+        });
+      }
+      permissions = userIds;
+    }
+
+    // Upload PDF to Supabase
+    storagePath = `${req.tenant.id}/${req.user.id}/${randomUUID()}.pdf`;
+
     const { error: uploadError } = await supabase.storage
       .from(BUCKET_NAME)
       .upload(storagePath, req.file.buffer, {
@@ -50,22 +128,32 @@ export const uploadDocumentController = async (req, res) => {
         upsert: false,
       });
 
-    if (uploadError) {
-      throw uploadError;
-    }
+    if (uploadError) throw uploadError;
 
-    uploaded = true;
-
-    // Save PDF metadata and storage path in TiDB
-    const document = await Document.create({
+    // Create document with selected visibility
+    document = await Document.create({
+      tenantId: req.tenant.id,
       userId: req.user.id,
       fileName: req.file.originalname,
       filePath: storagePath,
       fileSize: req.file.size,
+      visibility,
       status: "processing",
     });
 
-    processDocumentService(document.id).catch((error) => {
+    // Save selected employee permissions
+    if (visibility === "selected") {
+      await DocumentPermission.bulkCreate(
+        permissions.map((selectedUserId) => ({
+          documentId: document.id,
+          userId: selectedUserId,
+          grantedBy: req.user.id,
+        })),
+      );
+    }
+
+    // Start background PDF processing
+    processDocumentService(document.id, req.tenant.id).catch((error) => {
       console.error("Background document processing error:", error);
     });
 
@@ -75,33 +163,53 @@ export const uploadDocumentController = async (req, res) => {
       document,
     });
   } catch (error) {
-    // Remove uploaded PDF if database record creation fails
-    if (uploaded && storagePath) {
+    console.error("Document upload failed:", error);
+
+    // Clean up database record if created
+    if (document) {
+      await DocumentPermission.destroy({
+        where: { documentId: document.id },
+      }).catch(console.error);
+
+      await document.destroy().catch(console.error);
+    }
+
+    // Clean up Supabase file
+    if (storagePath) {
       await supabase.storage
         .from(BUCKET_NAME)
         .remove([storagePath])
         .catch(console.error);
     }
 
-    console.error("Document upload failed:", error);
-
     return res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message || "Failed to upload document",
     });
   }
 };
 
 export const deleteDocumentController = async (req, res) => {
   try {
-    const result = await deleteDocumentService(req.params.id, req.user.id);
+    const result = await deleteDocumentService(
+      req.params.id,
+      req.user.id,
+      req.tenant.id,
+    );
 
     res.status(200).json({
       success: true,
       ...result,
     });
   } catch (error) {
-    res.status(error.message === "Document not found" ? 404 : 500).json({
+    const statusCode =
+      error.message === "Document not found"
+        ? 404
+        : error.message.includes("not authorized")
+          ? 403
+          : 500;
+
+    res.status(statusCode).json({
       success: false,
       error: error.message,
     });

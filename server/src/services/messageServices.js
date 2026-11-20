@@ -18,8 +18,13 @@ import { uploadFileToGemini } from "./geminiServices.js";
 
 import { generateGeminiResponseWithTools } from "../agents/langchainAgent.js";
 import { getRelevantDocumentChunksService } from "../tools/toolService.js";
-
-const generateConversationTitle = async (content, selectedModel, userId) => {
+import supabase, { BUCKET_NAME } from "../config/supabase.js";
+const generateConversationTitle = async (
+  content,
+  selectedModel,
+  userId,
+  tenantId,
+) => {
   const response = await generateGeminiResponseWithTools(
     [
       {
@@ -41,6 +46,7 @@ User message: ${content}`,
     ],
     selectedModel,
     userId,
+    tenantId,
   );
 
   return response
@@ -118,6 +124,7 @@ const generateAndSaveAssistantMessageService = async (
   conversationId,
   userMessage,
   userId,
+  tenantId,
   selectedModel,
   res,
   existingAssistantMessage = null,
@@ -126,9 +133,10 @@ const generateAndSaveAssistantMessageService = async (
 
   const { summary, recentContext } = await getConversationContextService(
     conversationId,
+    userId,
     beforeMessageId,
+    tenantId,
   );
-
   const conversationContext = [];
 
   if (summary) {
@@ -171,6 +179,7 @@ const generateAndSaveAssistantMessageService = async (
     const retrievedChunks = await getRelevantDocumentChunksService(
       userMessage.content,
       userId,
+      tenantId,
       5,
     );
 
@@ -191,6 +200,7 @@ const generateAndSaveAssistantMessageService = async (
     conversationContext,
     selectedModel,
     userId,
+    tenantId,
   );
 
   const assistantContent = await streamGeminiResponseService(
@@ -225,6 +235,7 @@ const generateAndSaveAssistantMessageService = async (
 export const createMessageService = async (
   conversationId,
   userId,
+  tenantId,
   content,
   file,
   selectedModel,
@@ -236,6 +247,7 @@ export const createMessageService = async (
     where: {
       id: conversationId,
       userId,
+      tenantId,
     },
   });
 
@@ -255,6 +267,7 @@ export const createMessageService = async (
       content,
       selectedModel,
       userId,
+      tenantId,
     );
 
     await conversation.update({ title });
@@ -271,7 +284,7 @@ export const createMessageService = async (
 
     const safeFileName = file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
 
-    storagePath = `${userId}/${conversationId}/${randomUUID()}-${safeFileName}`;
+    storagePath = `${tenantId}/${userId}/${conversationId}/${randomUUID()}-${safeFileName}`;
 
     const { error } = await supabase.storage
       .from(BUCKET_NAME)
@@ -306,6 +319,7 @@ export const createMessageService = async (
       conversationId,
       userMessage,
       userId,
+      tenantId,
       selectedModel,
       res,
     );
@@ -322,9 +336,11 @@ export const createMessageService = async (
     });
 
     if (unsummarizedCount >= 5) {
-      updateConversationSummaryService(conversationId).catch((error) => {
-        console.error("Summary update failed:", error);
-      });
+      updateConversationSummaryService(conversationId, userId, tenantId).catch(
+        (error) => {
+          console.error("Summary update failed:", error);
+        },
+      );
     }
 
     return {
@@ -359,12 +375,13 @@ export const createMessageService = async (
 export const regenerateMessageService = async ({
   conversationId,
   userId,
+  tenantId,
   messageId,
   selectedModel,
   res,
 }) => {
   const conversation = await Conversation.findOne({
-    where: { id: conversationId, userId },
+    where: { id: conversationId, userId, tenantId },
   });
   if (!conversation) throw new Error("Conversation not found");
 
@@ -392,6 +409,7 @@ export const regenerateMessageService = async ({
     conversationId,
     userMessage,
     userId,
+    tenantId,
     selectedModel,
     res,
     assistantMessage,
@@ -400,16 +418,17 @@ export const regenerateMessageService = async ({
 export const getMessagesByConversationIdService = async (
   conversationId,
   userId,
+  tenantId,
 ) => {
   const conversation = await Conversation.findOne({
     where: {
       id: conversationId,
       userId,
+      tenantId,
     },
   });
-  if (!conversation) {
-    throw new Error("Conversation not found");
-  }
+  if (!conversation) throw new Error("Conversation not found");
+
   const messages = await Message.findAll({
     where: { conversationId },
     order: [["createdAt", "ASC"]],
@@ -417,7 +436,7 @@ export const getMessagesByConversationIdService = async (
   return messages;
 };
 
-export const getMessageByIdService = async (messageId, userId) => {
+export const getMessageByIdService = async (messageId, userId, tenantId) => {
   const message = await Message.findOne({
     where: { id: messageId },
     include: [
@@ -425,7 +444,9 @@ export const getMessageByIdService = async (messageId, userId) => {
         model: Conversation,
         where: {
           userId,
+          tenantId,
         },
+        attributes: [],
       },
     ],
   });

@@ -2,79 +2,86 @@ import {
   createConversationService,
   getConversationService,
   getUserConversationsService,
-  deleteConversationService
+  deleteConversationService,
 } from "../services/conversationServices.js";
 
+// Create conversation
 export const createConversation = async (req, res) => {
-  const { title } = req.body;
-  const userId = req.user.id;
   try {
-    const conversation = await createConversationService(userId, title);
-    res
-      .status(201)
-      .json({ message: "Conversation created successfully", conversation });
-  } catch (err) {
-    res
-      .status(400)
-      .json({ message: "Error creating conversation", error: err.message });
-  }
-};
+    const { title } = req.body;
 
-export const getUserConversation = async (req, res) => {
-  const userId = req.user.id;
-  try {
-    const getUserConversations = await getUserConversationsService(userId);
-    res
-      .status(200)
-      .json({
-        message: "User conversation fetched successfully",
-        getUserConversations,
-      });
-  } catch (err) {
-    res
-      .status(400)
-      .json({
-        message: "Error fetching user conversations",
-        error: err.message,
-      });
-  }
-};
-
-export const getConversation = async (req, res) => {
-  const conversationId = req.params.conversationId;
-  const userId = req.user.id;
-  try {
-    const getConversation = await getConversationService(
-      conversationId,
-      userId,
+    const conversation = await createConversationService(
+      req.user.id,
+      req.tenant.id,
+      title,
     );
-    res
-      .status(200)
-      .json({ message: "Conversation fetched successfully", getConversation });
-  } catch (err) {
-    res
-      .status(400)
-      .json({ message: "Error fetching conversation", error: err.message });
+
+    res.status(201).json({
+      message: "Conversation created successfully",
+      conversation,
+    });
+  } catch (error) {
+    res.status(400).json({
+      message: "Error creating conversation",
+      error: error.message,
+    });
   }
 };
 
+// Get user's conversations
+export const getUserConversation = async (req, res) => {
+  try {
+    const conversations = await getUserConversationsService(
+      req.user.id,
+      req.tenant.id,
+    );
+
+    res.status(200).json({
+      message: "User conversations fetched successfully",
+      getUserConversations: conversations,
+    });
+  } catch (error) {
+    res.status(400).json({
+      message: "Error fetching user conversations",
+      error: error.message,
+    });
+  }
+};
+
+// Get one conversation
+export const getConversation = async (req, res) => {
+  try {
+    const conversation = await getConversationService(
+      req.params.conversationId,
+      req.user.id,
+      req.tenant.id,
+    );
+
+    res.status(200).json({
+      message: "Conversation fetched successfully",
+      getConversation: conversation,
+    });
+  } catch (error) {
+    res.status(400).json({
+      message: "Error fetching conversation",
+      error: error.message,
+    });
+  }
+};
+
+// Delete conversation
 export const deleteConversation = async (req, res) => {
   try {
-    const userId = req.user.id;
-    const { conversationId } = req.params;
-
-    console.log("User ID:", userId);
-    console.log("Conversation ID:", conversationId);
-
     const result = await deleteConversationService(
-      userId,
-      conversationId,
+      req.user.id,
+      req.params.conversationId,
+      req.tenant.id,
     );
 
     res.status(200).json(result);
   } catch (error) {
-    console.error("Delete controller error:", error);
-
-    res.status(400).json({ error: error.message });
+    res.status(400).json({
+      error: error.message,
+    });
   }
 };

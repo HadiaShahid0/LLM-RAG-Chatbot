@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { FiUser, FiMail, FiLock, FiUserPlus } from "react-icons/fi";
+import {
+  FiUser,
+  FiMail,
+  FiLock,
+  FiUserPlus,
+  FiBriefcase,
+} from "react-icons/fi";
 
 import { registerUser } from "../services/authServices";
 
@@ -11,6 +17,7 @@ const RegisterPage = () => {
     username: "",
     email: "",
     password: "",
+    companyName: "",
   });
 
   const [error, setError] = useState("");
@@ -43,10 +50,19 @@ const RegisterPage = () => {
       return;
     }
 
+    if (!formData.companyName) {
+      setError("Company Name is required.");
+      return;
+    }
     try {
       setLoading(true);
 
-      await registerUser(formData);
+      await registerUser({
+        ...formData,
+        username: formData.username.trim(),
+        email: formData.email.trim(),
+        companyName: formData.companyName.trim(),
+      });
 
       navigate("/login");
     } catch (error) {
@@ -58,9 +74,11 @@ const RegisterPage = () => {
 
   return (
     <div className="min-vh-100 bg-light d-flex align-items-center justify-content-center p-3">
-      <div className="card border-0 shadow-sm rounded-4 w-100" style={{ maxWidth: "450px" }}>
+      <div
+        className="card border-0 shadow-sm rounded-4 w-100"
+        style={{ maxWidth: "450px" }}
+      >
         <div className="card-body p-4 p-md-5">
-
           <div className="text-center mb-4">
             <div
               className="mx-auto mb-3 d-flex align-items-center justify-content-center rounded-4"
@@ -77,7 +95,7 @@ const RegisterPage = () => {
             <h2 className="fw-bold mb-2">Create Account</h2>
 
             <p className="text-secondary mb-0">
-              Create your account to start chatting with AI.
+              Create your company account to start chatting with AI.
             </p>
           </div>
 
@@ -88,12 +106,9 @@ const RegisterPage = () => {
           )}
 
           <form onSubmit={handleSubmit}>
-
             {/* Username */}
             <div className="mb-3">
-              <label className="form-label fw-semibold">
-                Username
-              </label>
+              <label className="form-label fw-semibold">Username</label>
 
               <div className="input-group">
                 <span className="input-group-text bg-white">
@@ -114,9 +129,7 @@ const RegisterPage = () => {
 
             {/* Email */}
             <div className="mb-3">
-              <label className="form-label fw-semibold">
-                Email
-              </label>
+              <label className="form-label fw-semibold">Email</label>
 
               <div className="input-group">
                 <span className="input-group-text bg-white">
@@ -135,11 +148,30 @@ const RegisterPage = () => {
               </div>
             </div>
 
+            {/* Company Name */}
+            <div className="mb-3">
+              <label className="form-label fw-semibold">Company Name</label>
+
+              <div className="input-group">
+                <span className="input-group-text bg-white">
+                  <FiBriefcase />
+                </span>
+
+                <input
+                  type="text"
+                  name="companyName"
+                  className="form-control"
+                  placeholder="Enter your company name"
+                  value={formData.companyName}
+                  onChange={handleChange}
+                  disabled={loading}
+                />
+              </div>
+            </div>
+
             {/* Password */}
             <div className="mb-4">
-              <label className="form-label fw-semibold">
-                Password
-              </label>
+              <label className="form-label fw-semibold">Password</label>
 
               <div className="input-group">
                 <span className="input-group-text bg-white">
@@ -179,18 +211,12 @@ const RegisterPage = () => {
           </form>
 
           <div className="text-center mt-4">
-            <span className="text-secondary">
-              Already have an account?{" "}
-            </span>
+            <span className="text-secondary">Already have an account? </span>
 
-            <Link
-              to="/login"
-              className="text-decoration-none fw-semibold"
-            >
+            <Link to="/login" className="text-decoration-none fw-semibold">
               Login
             </Link>
           </div>
-
         </div>
       </div>
     </div>

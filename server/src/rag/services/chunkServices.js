@@ -1,19 +1,31 @@
 import { RecursiveCharacterTextSplitter } from "@langchain/textsplitters";
 
 export const cleanPDFTextService = (documents) => {
-  if (!Array.isArray(documents) || documents.length === 0)
+  if (!Array.isArray(documents) || documents.length === 0) {
     throw new Error("PDF text cannot be empty");
+  }
 
-  return documents
+  const cleanedDocuments = documents
     .map((document) => {
-      let cleanedText = document.pageContent;
+      let cleanedText = document.pageContent || "";
+
       cleanedText = cleanedText.replace(/--\s*\d+\s+of\s+\d+\s*--/gi, "");
       cleanedText = cleanedText.replace(/[^\S\n]+/g, " ");
       cleanedText = cleanedText.replace(/\n{3,}/g, "\n\n");
       cleanedText = cleanedText.trim();
-      return { ...document, pageContent: cleanedText };
+
+      return {
+        ...document,
+        pageContent: cleanedText,
+      };
     })
-    .filter((document) => document.pageContent);
+    .filter((document) => document.pageContent.length > 0);
+
+  if (!cleanedDocuments.length) {
+    throw new Error("No readable text remains after PDF cleaning");
+  }
+
+  return cleanedDocuments;
 };
 
 export const splitTextIntoChunksService = async (

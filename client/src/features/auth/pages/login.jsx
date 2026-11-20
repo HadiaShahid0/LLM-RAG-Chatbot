@@ -1,11 +1,26 @@
 import { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { FiMail, FiLock, FiLogIn, FiEye, FiEyeOff } from "react-icons/fi";
+import { Link, useNavigate, useLocation } from "react-router-dom";
+import {
+  FiMail,
+  FiLock,
+  FiLogIn,
+  FiEye,
+  FiEyeOff,
+} from "react-icons/fi";
 
 import { loginUser } from "../services/authServices";
+import {
+  acceptExistingInvitation,
+} from "../../invitation/services/invitationService.js";
+
+import {
+  getUserTenants,
+  selectTenant,
+} from "../../chat/services/tenantService.js";
 
 const LoginPage = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [formData, setFormData] = useState({
     email: "",
@@ -41,10 +56,48 @@ const LoginPage = () => {
     try {
       setLoading(true);
 
+      // Step 1: Login user
       await loginUser(formData);
 
-      // Login successful
-      navigate("/chat");
+      // Step 2: Check if user came from an invitation
+      const invitationToken = location.state?.invitationToken;
+
+      if (invitationToken) {
+        // Accept invitation using existing account
+        const result = await acceptExistingInvitation(invitationToken);
+
+        // Fetch user's companies
+        const tenants = await getUserTenants();
+
+        // Find invited company
+        const tenant = tenants.find(
+          (item) => Number(item.id) === Number(result.tenantId),
+        );
+
+        if (!tenant) {
+          throw new Error("Company membership could not be found.");
+        }
+
+        // Select invited company
+        await selectTenant(tenant.id);
+
+        // Save active company
+        localStorage.setItem(
+          "activeTenant",
+          JSON.stringify({
+            id: tenant.id,
+            name: tenant.name,
+            role: tenant.role,
+          }),
+        );
+
+        // Open dashboard
+        window.location.assign("/chat");
+        return;
+      }
+
+      // Step 3: Normal login
+      navigate("/select-tenant");
     } catch (error) {
       setError(error.message);
     } finally {
@@ -59,7 +112,6 @@ const LoginPage = () => {
         style={{ maxWidth: "450px" }}
       >
         <div className="card-body p-4 p-md-5">
-
           {/* Header */}
           <div className="text-center mb-4">
             <div
@@ -74,12 +126,12 @@ const LoginPage = () => {
               <FiLogIn size={28} />
             </div>
 
-            <h2 className="fw-bold mb-2">
-              Welcome Back
-            </h2>
+            <h2 className="fw-bold mb-2">Welcome Back</h2>
 
             <p className="text-secondary mb-0">
-              Login to continue chatting with AI.
+              {location.state?.invitationToken
+                ? "Login to accept your company invitation."
+                : "Login to continue chatting with AI."}
             </p>
           </div>
 
@@ -92,12 +144,9 @@ const LoginPage = () => {
 
           {/* Login Form */}
           <form onSubmit={handleSubmit}>
-
             {/* Email */}
             <div className="mb-3">
-              <label className="form-label fw-semibold">
-                Email
-              </label>
+              <label className="form-label fw-semibold">Email</label>
 
               <div className="input-group">
                 <span className="input-group-text bg-white">
@@ -112,15 +161,14 @@ const LoginPage = () => {
                   value={formData.email}
                   onChange={handleChange}
                   disabled={loading}
+                  required
                 />
               </div>
             </div>
 
             {/* Password */}
             <div className="mb-4">
-              <label className="form-label fw-semibold">
-                Password
-              </label>
+              <label className="form-label fw-semibold">Password</label>
 
               <div className="input-group">
                 <span className="input-group-text bg-white">
@@ -135,21 +183,16 @@ const LoginPage = () => {
                   value={formData.password}
                   onChange={handleChange}
                   disabled={loading}
+                  required
                 />
 
                 <button
                   type="button"
                   className="btn btn-outline-secondary"
-                  onClick={() =>
-                    setShowPassword((previous) => !previous)
-                  }
+                  onClick={() => setShowPassword((previous) => !previous)}
                   disabled={loading}
                 >
-                  {showPassword ? (
-                    <FiEyeOff />
-                  ) : (
-                    <FiEye />
-                  )}
+                  {showPassword ? <FiEyeOff /> : <FiEye />}
                 </button>
               </div>
             </div>
@@ -166,8 +209,12 @@ const LoginPage = () => {
                     className="spinner-border spinner-border-sm me-2"
                     role="status"
                   />
-                  Logging in...
+                  {location.state?.invitationToken
+                    ? "Accepting invitation..."
+                    : "Logging in..."}
                 </>
+              ) : location.state?.invitationToken ? (
+                "Login & Join Company"
               ) : (
                 "Login"
               )}
@@ -187,7 +234,6 @@ const LoginPage = () => {
               Create Account
             </Link>
           </div>
-
         </div>
       </div>
     </div>

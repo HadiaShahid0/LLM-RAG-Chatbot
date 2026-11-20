@@ -60,8 +60,10 @@ export const generateGeminiResponseWithTools = async (
   messages,
   selectedModel = "gemini",
   userId,
+  tenantId,
 ) => {
   if (!userId) throw new Error("User Id is required");
+  if(!tenantId) throw new Error("Tenant Id is required")
 
   const convertedMessages = convertMessages(messages);
 
@@ -83,6 +85,7 @@ export const generateGeminiResponseWithTools = async (
   const documentContext = await retrieveDocumentContextService(
     question,
     userId,
+    tenantId,
     conversationContext,
   );
 
@@ -95,7 +98,7 @@ const documentMessage = shouldSearchDocuments
       content: `
 DOCUMENT CONTEXT:
 
-The following information was retrieved from the user's uploaded documents.
+The following information was retrieved from the user's authorized documents.
 
 ${JSON.stringify(documentResults)}
 
@@ -125,7 +128,7 @@ STRICT INSTRUCTIONS:
 
   const citations = [];
 
-  const tools = createLangChainTools(userId, citations, false);
+  const tools = createLangChainTools(userId, tenantId, citations, false);
 
   const agent = createAgent({
     model: models[selectedModel] || geminiModel,

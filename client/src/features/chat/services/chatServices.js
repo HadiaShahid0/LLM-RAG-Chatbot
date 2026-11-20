@@ -1,8 +1,25 @@
 const API_URL = "/api";
 
+// Get active tenant header
+const getTenantHeaders = () => {
+  const tenant = JSON.parse(
+    localStorage.getItem("activeTenant") || "null",
+  );
+
+  if (!tenant?.id) {
+    throw new Error("Please select a workspace first");
+  }
+
+  return {
+    "x-tenant-id": String(tenant.id),
+  };
+};
+
+// Get conversations
 export const getConversationsServices = async () => {
   const response = await fetch(`${API_URL}/conversations`, {
     credentials: "include",
+    headers: getTenantHeaders(),
   });
 
   const data = await response.json();
@@ -14,16 +31,16 @@ export const getConversationsServices = async () => {
   return data.getUserConversations;
 };
 
+// Create conversation
 export const createConversationServices = async (title = "New Chat") => {
   const response = await fetch(`${API_URL}/conversations`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      ...getTenantHeaders(),
     },
     credentials: "include",
-    body: JSON.stringify({
-      title,
-    }),
+    body: JSON.stringify({ title }),
   });
 
   const data = await response.json();
@@ -35,11 +52,13 @@ export const createConversationServices = async (title = "New Chat") => {
   return data.conversation;
 };
 
+// Get messages by conversation
 export const getMessagesServices = async (conversationId) => {
   const response = await fetch(
     `${API_URL}/messages/conversations/${conversationId}`,
     {
       credentials: "include",
+      headers: getTenantHeaders(),
     },
   );
 
@@ -52,13 +71,14 @@ export const getMessagesServices = async (conversationId) => {
   return data.messages;
 };
 
+// Send message
 export const sendMessageServices = async (
   conversationId,
   content,
   file,
   selectedModel,
   onChunk,
-  signal
+  signal,
 ) => {
   const formData = new FormData();
 
@@ -73,8 +93,9 @@ export const sendMessageServices = async (
   const response = await fetch(`${API_URL}/messages`, {
     method: "POST",
     credentials: "include",
+    headers: getTenantHeaders(),
     body: formData,
-    signal
+    signal,
   });
 
   if (!response.ok) {
@@ -83,7 +104,6 @@ export const sendMessageServices = async (
   }
 
   const reader = response.body.getReader();
-
   const decoder = new TextDecoder();
 
   let completeResponse = "";
@@ -92,9 +112,8 @@ export const sendMessageServices = async (
     while (true) {
       const { done, value } = await reader.read();
 
-      if (done) {
-        break;
-      }
+      if (done) break;
+
       const text = decoder.decode(value, { stream: true });
 
       completeResponse += text;
@@ -104,29 +123,37 @@ export const sendMessageServices = async (
       }
     }
 
+    completeResponse += decoder.decode();
+
     return completeResponse;
   } finally {
     reader.releaseLock();
   }
 };
 
+// Regenerate assistant response
 export const regenerateMessageServices = async (
   conversationId,
   messageId,
   selectedModel,
   onChunk,
 ) => {
-  const response = await fetch(`${API_URL}/messages/${messageId}/regenerate`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
+  const response = await fetch(
+    `${API_URL}/messages/${messageId}/regenerate`,
+    {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        ...getTenantHeaders(),
+      },
+      credentials: "include",
+      body: JSON.stringify({
+        conversationId,
+        model: selectedModel,
+      }),
     },
-    credentials: "include",
-    body: JSON.stringify({
-      conversationId,
-      model: selectedModel,
-    }),
-  });
+  );
+
   if (!response.ok) {
     const errorText = await response.text();
     throw new Error(errorText);
@@ -141,9 +168,8 @@ export const regenerateMessageServices = async (
     while (true) {
       const { done, value } = await reader.read();
 
-      if (done) {
-        break;
-      }
+      if (done) break;
+
       const text = decoder.decode(value, { stream: true });
 
       completeResponse += text;
@@ -153,11 +179,15 @@ export const regenerateMessageServices = async (
       }
     }
 
+    completeResponse += decoder.decode();
+
     return completeResponse;
   } finally {
     reader.releaseLock();
   }
 };
+
+// Logout
 export const logoutServices = async () => {
   const response = await fetch(`${API_URL}/auth/logout`, {
     method: "POST",
@@ -173,18 +203,22 @@ export const logoutServices = async () => {
   return data;
 };
 
+// Delete conversation
 export const deleteConversationService = async (conversationId) => {
   const response = await fetch(
     `${API_URL}/conversations/${conversationId}`,
     {
       method: "DELETE",
       credentials: "include",
+      headers: getTenantHeaders(),
     },
   );
 
   const data = await response.json();
 
-  if (!response.ok)
+  if (!response.ok) {
     throw new Error(data.error || "Failed to delete conversation");
+  }
+
   return data;
 };
