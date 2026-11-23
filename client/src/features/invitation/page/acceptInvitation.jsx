@@ -5,7 +5,7 @@ import { FiCheckCircle, FiAlertCircle, FiLoader } from "react-icons/fi";
 import CreateEmployeeAccountPage from "../components/createEmployeeAccount.jsx";
 
 import {
-  validateInvitation,
+  validateInvitationService,
   acceptInvitation,
 } from "../services/invitationService";
 
@@ -26,7 +26,7 @@ const AcceptInvitationPage = () => {
   useEffect(() => {
     const checkInvitation = async () => {
       try {
-        const data = await validateInvitation(token);
+        const data = await validateInvitationService(token);
         setInvitation(data);
       } catch (error) {
         setError(error.message);
