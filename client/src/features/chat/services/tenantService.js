@@ -1,19 +1,18 @@
-const API_URL="/api"
-export const getUserTenants = async () => {
+const API_URL = "/api";
+
+export const getUserTenantsService = async () => {
   const response = await fetch(`${API_URL}/tenants`, {
     credentials: "include",
   });
 
   const data = await response.json();
 
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to fetch tenants");
-  }
+  if (!response.ok) throw new Error(data.message || "Failed to fetch tenants");
 
   return data.tenants;
 };
 
-export const selectTenant = async (tenantId) => {
+export const selectTenantService = async (tenantId) => {
   const response = await fetch(`${API_URL}/tenants/${tenantId}/select`, {
     method: "POST",
     credentials: "include",
@@ -21,15 +20,12 @@ export const selectTenant = async (tenantId) => {
 
   const data = await response.json();
 
-  if (!response.ok) {
-    throw new Error(data.message || "Failed to select tenant");
-  }
+  if (!response.ok) throw new Error(data.message || "Failed to select tenant");
 
   return data.tenant;
 };
 
-// Fetch employees from the active tenant
-export const getTenantEmployees = async () => {
+export const getTenantEmployeesService = async () => {
   const activeTenant = JSON.parse(
     localStorage.getItem("activeTenant") || "null",
   );
@@ -47,30 +43,26 @@ export const getTenantEmployees = async () => {
 
   const data = await response.json();
 
-  if (!response.ok) {
+  if (!response.ok)
     throw new Error(data.message || "Failed to fetch employees");
-  }
 
   return data.employees;
 };
 
-// Fetch document visibility and permissions
-export const getDocumentAccess = async (documentId) => {
+export const getDocumentAccessService = async (documentId) => {
   const response = await fetch(`${API_URL}/tenants/${documentId}/access`, {
     credentials: "include",
   });
 
   const data = await response.json();
 
-  if (!response.ok) {
+  if (!response.ok)
     throw new Error(data.message || "Failed to fetch document access");
-  }
 
   return data;
 };
 
-// Update document visibility and permissions
-export const updateDocumentVisibility = async (
+export const updateDocumentVisibilityService = async (
   documentId,
   visibility,
   permissions = [],
@@ -89,9 +81,8 @@ export const updateDocumentVisibility = async (
 
   const data = await response.json();
 
-  if (!response.ok) {
+  if (!response.ok)
     throw new Error(data.message || "Failed to update document access");
-  }
 
   return data;
 };

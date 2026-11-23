@@ -10,8 +10,8 @@ import {
 } from "../services/invitationService";
 
 import {
-  getUserTenants,
-  selectTenant,
+  getUserTenantsService,
+  selectTenantService,
 } from "../../chat/services/tenantService.js";
 
 const AcceptInvitationPage = () => {
@@ -38,19 +38,18 @@ const AcceptInvitationPage = () => {
     checkInvitation();
   }, [token]);
 
-  // Select the invited company after successful acceptance
   const openCompanyDashboard = async (tenantId) => {
-    const tenants = await getUserTenants();
+    const tenants = await getUserTenantsService();
 
     const tenant = tenants.find(
       (item) => Number(item.id) === Number(tenantId),
     );
 
-    if (!tenant) {
+    if (!tenant) 
       throw new Error("Company membership was created, but the company could not be found.");
-    }
+    
 
-    await selectTenant(tenantId);
+    await selectTenantService(tenantId);
 
     localStorage.setItem(
       "activeTenant",
@@ -61,7 +60,6 @@ const AcceptInvitationPage = () => {
       }),
     );
 
-    // Reload so existing authentication checks can read the new cookie.
     window.location.assign("/chat");
   };
 

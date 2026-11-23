@@ -17,6 +17,7 @@ const router = express.Router();
 router.post("/", authMiddleware, tenantMiddleware, createInvitationController);
 
 router.get("/", authMiddleware, tenantMiddleware, getInvitationsController);
+
 router.post(
   "/:id/resend",
   authMiddleware,
@@ -30,16 +31,14 @@ router.patch(
   tenantMiddleware,
   revokeInvitationController,
 );
-// Public invitation validation
 router.get("/validate/:token", validateInvitationController);
 
-// Public registration for new employees
 router.post("/accept", acceptInvitationController);
 
-// Existing authenticated users
 router.post(
   "/accept-existing",
   authMiddleware,
   acceptExistingInvitationController,
 );
+
 export default router;

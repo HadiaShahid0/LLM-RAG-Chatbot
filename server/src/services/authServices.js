@@ -4,6 +4,7 @@ import { generateToken } from "../utils/jwt.js";
 import Tenant from "../models/tenantModel.js";
 import TenantMember from "../models/tenantMemberModel.js";
 import Sequelize from "../config/db.js";
+
 export const registerUserService = async (
   username,
   email,
@@ -11,11 +12,14 @@ export const registerUserService = async (
   companyName,
 ) => {
   const existingUser = await User.findOne({ where: { email } });
+
   if (existingUser) throw new Error("User already exists");
 
   const transaction = await Sequelize.transaction();
+
   try {
     const bcryptedPassword = await bcrypt.hash(password, 10);
+
     const newUser = await User.create(
       {
         username,
@@ -26,12 +30,13 @@ export const registerUserService = async (
     );
 
     const newTenant = await Tenant.create(
-      {
+      { 
         name: companyName,
         createdBy: newUser.id,
       },
       { transaction },
     );
+
     await TenantMember.create(
       {
         tenantId: newTenant.id,
@@ -42,7 +47,9 @@ export const registerUserService = async (
       },
       { transaction },
     );
+
     await transaction.commit();
+    
     return {
       user: {
         id: newUser.id,

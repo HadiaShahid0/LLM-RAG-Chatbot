@@ -12,7 +12,7 @@ import {
   FiBriefcase,
 } from "react-icons/fi";
 
-import { getTenantEmployees } from "../services/tenantService.js";
+import { getTenantEmployeesService } from "../services/tenantService.js";
 
 const EmployeesPage = ({ isAdmin = false }) => {
   const [employees, setEmployees] = useState([]);
@@ -25,7 +25,7 @@ const EmployeesPage = ({ isAdmin = false }) => {
       setLoading(true);
       setError("");
 
-      const data = await getTenantEmployees();
+      const data = await getTenantEmployeesService();
       setEmployees(data);
     } catch (error) {
       setError(error.message || "Failed to load employees.");
@@ -40,7 +40,6 @@ const EmployeesPage = ({ isAdmin = false }) => {
     }
   }, [isAdmin]);
 
-  // Only admins can access this page
   if (!isAdmin) {
     return (
       <div className="container-fluid p-4">
@@ -52,7 +51,6 @@ const EmployeesPage = ({ isAdmin = false }) => {
     );
   }
 
-  // Search employees
   const filteredEmployees = employees.filter((employee) => {
     const user = employee.user || employee;
 
@@ -62,7 +60,6 @@ const EmployeesPage = ({ isAdmin = false }) => {
     return `${name} ${email}`.toLowerCase().includes(search.toLowerCase());
   });
 
-  // Employee statistics
   const activeEmployees = employees.filter(
     (employee) => employee.status === "active",
   ).length;
@@ -107,7 +104,6 @@ const EmployeesPage = ({ isAdmin = false }) => {
         overflowX: "hidden",
       }}
     >
-      {/* Page Header */}
       <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
           <div className="d-flex align-items-center gap-2 mb-2">
@@ -140,7 +136,6 @@ const EmployeesPage = ({ isAdmin = false }) => {
         </button>
       </div>
 
-      {/* Statistics */}
       <div className="row g-3 mb-4">
         <div className="col-md-6">
           <div className="card border-0 shadow-sm rounded-4 h-100">
@@ -173,7 +168,6 @@ const EmployeesPage = ({ isAdmin = false }) => {
         </div>
       </div>
 
-      {/* Employee Directory */}
       <div className="card border-0 shadow-sm rounded-4">
         <div className="card-header bg-white border-0 p-4">
           <div className="d-flex flex-wrap justify-content-between align-items-center gap-3">
@@ -209,7 +203,6 @@ const EmployeesPage = ({ isAdmin = false }) => {
         </div>
 
         <div className="card-body p-4">
-          {/* Loading */}
           {loading ? (
             <div className="text-center py-5">
               <div className="spinner-border text-primary mb-3" />
@@ -217,7 +210,6 @@ const EmployeesPage = ({ isAdmin = false }) => {
               <p className="text-muted mb-0">Loading workspace members...</p>
             </div>
           ) : error ? (
-            /* Error */
             <div className="text-center py-5">
               <FiAlertCircle size={35} className="text-danger mb-3" />
 
@@ -233,7 +225,6 @@ const EmployeesPage = ({ isAdmin = false }) => {
               </button>
             </div>
           ) : filteredEmployees.length === 0 ? (
-            /* Empty State */
             <div className="text-center py-5">
               <FiUsers size={40} className="text-muted mb-3" />
 
@@ -248,7 +239,6 @@ const EmployeesPage = ({ isAdmin = false }) => {
               </p>
             </div>
           ) : (
-            /* Employee Cards */
             <div className="row g-3">
               {filteredEmployees.map((employee) => {
                 const user = employee.user || employee;
@@ -258,12 +248,11 @@ const EmployeesPage = ({ isAdmin = false }) => {
                 const email = user.email || "No email available";
 
                 const role = employee.role || "employee";
-               const status = employee.status;
+                const status = employee.status;
                 return (
                   <div className="col-md-6 col-xl-4" key={employee.id}>
                     <div className="border rounded-4 p-3 h-100 bg-white">
                       <div className="d-flex align-items-center gap-3 mb-3">
-                        {/* Avatar */}
                         <div
                           className="rounded-circle bg-primary bg-opacity-10 text-white fw-bold d-flex align-items-center justify-content-center flex-shrink-0"
                           style={{
@@ -275,7 +264,6 @@ const EmployeesPage = ({ isAdmin = false }) => {
                           {getInitials(name)}
                         </div>
 
-                        {/* Employee Info */}
                         <div className="overflow-hidden">
                           <h6 className="fw-bold mb-1 text-truncate">{name}</h6>
 
@@ -323,7 +311,6 @@ const EmployeesPage = ({ isAdmin = false }) => {
         </div>
       </div>
 
-      {/* Footer */}
       <div className="text-center mt-4">
         <small className="text-muted">
           <FiBriefcase className="me-1" />

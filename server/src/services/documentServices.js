@@ -67,7 +67,6 @@ export const processDocumentService = async (documentId, tenantId) => {
 
     const fileBuffer = Buffer.from(await data.arrayBuffer());
 
-    // Extract PDF text
     const extractedDocuments = await extractTextFromPDFService(fileBuffer);
 
     const cleanedDocuments = cleanPDFTextService(extractedDocuments);
@@ -76,7 +75,6 @@ export const processDocumentService = async (documentId, tenantId) => {
       .map((item) => item.pageContent)
       .join("\n");
 
-    // Generate summary and topics
     const metadata = await generateDocumentMetadataService(fullText);
 
     await document.update({
@@ -105,7 +103,6 @@ export const processDocumentService = async (documentId, tenantId) => {
 };
 
 export const deleteDocumentService = async (documentId, userId, tenantId) => {
-  // Verify workspace membership
   const membership = await TenantMember.findOne({
     where: {
       userId,
@@ -114,11 +111,9 @@ export const deleteDocumentService = async (documentId, userId, tenantId) => {
     },
   });
 
-  if (!membership) {
+  if (!membership)
     throw new Error("You are not authorized to access this workspace");
-  }
 
-  // Find document inside the current tenant
   const document = await Document.findOne({
     where: {
       id: documentId,
@@ -126,21 +121,13 @@ export const deleteDocumentService = async (documentId, userId, tenantId) => {
     },
   });
 
-  if (!document) {
-    throw new Error("Document not found");
-  }
+  if (!document) throw new Error("Document not found");
 
-  // Employees can delete only their own documents
-  if (
-    membership.role !== "admin" &&
-    String(document.userId) !== String(userId)
-  ) {
+  if (membership.role !== "admin" && String(document.userId) !== String(userId))
     throw new Error("You are not authorized to delete this document");
-  }
 
   const qdrant = await getDocumentCollectionService();
 
-  // Delete document chunks from Qdrant
   await qdrant.delete(COLLECTION_NAME, {
     filter: {
       must: [
@@ -157,14 +144,12 @@ export const deleteDocumentService = async (documentId, userId, tenantId) => {
     wait: true,
   });
 
-  // Delete PDF from Supabase Storage
   const { error } = await supabase.storage
     .from(BUCKET_NAME)
     .remove([document.filePath]);
 
   if (error) throw error;
 
-  // Delete database record
   await document.destroy();
 
   return {

@@ -36,7 +36,6 @@ export const uploadDocumentController = async (req, res) => {
       });
     }
 
-    // Verify active workspace membership
     const membership = await TenantMember.findOne({
       where: {
         userId: req.user.id,
@@ -118,7 +117,6 @@ export const uploadDocumentController = async (req, res) => {
       permissions = userIds;
     }
 
-    // Upload PDF to Supabase
     storagePath = `${req.tenant.id}/${req.user.id}/${randomUUID()}.pdf`;
 
     const { error: uploadError } = await supabase.storage
@@ -130,7 +128,6 @@ export const uploadDocumentController = async (req, res) => {
 
     if (uploadError) throw uploadError;
 
-    // Create document with selected visibility
     document = await Document.create({
       tenantId: req.tenant.id,
       userId: req.user.id,
@@ -141,7 +138,6 @@ export const uploadDocumentController = async (req, res) => {
       status: "processing",
     });
 
-    // Save selected employee permissions
     if (visibility === "selected") {
       await DocumentPermission.bulkCreate(
         permissions.map((selectedUserId) => ({
@@ -152,7 +148,6 @@ export const uploadDocumentController = async (req, res) => {
       );
     }
 
-    // Start background PDF processing
     processDocumentService(document.id, req.tenant.id).catch((error) => {
       console.error("Background document processing error:", error);
     });
@@ -165,7 +160,6 @@ export const uploadDocumentController = async (req, res) => {
   } catch (error) {
     console.error("Document upload failed:", error);
 
-    // Clean up database record if created
     if (document) {
       await DocumentPermission.destroy({
         where: { documentId: document.id },
@@ -174,7 +168,6 @@ export const uploadDocumentController = async (req, res) => {
       await document.destroy().catch(console.error);
     }
 
-    // Clean up Supabase file
     if (storagePath) {
       await supabase.storage
         .from(BUCKET_NAME)

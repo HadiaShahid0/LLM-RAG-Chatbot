@@ -106,7 +106,6 @@ const RegisterPage = () => {
           )}
 
           <form onSubmit={handleSubmit}>
-            {/* Username */}
             <div className="mb-3">
               <label className="form-label fw-semibold">Username</label>
 

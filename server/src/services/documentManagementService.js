@@ -12,15 +12,12 @@ export const updateDocumentVisibilityService = async (
 ) => {
   const allowedVisibility = ["private", "employee", "admin", "selected"];
 
-  if (!allowedVisibility.includes(visibility)) {
+  if (!allowedVisibility.includes(visibility))
     throw new Error("Invalid document visibility");
-  }
 
-  if (!Array.isArray(permissions)) {
+  if (!Array.isArray(permissions))
     throw new Error("Permissions must be an array");
-  }
 
-  // Verify active workspace membership.
   const membership = await TenantMember.findOne({
     where: {
       userId,
@@ -29,9 +26,8 @@ export const updateDocumentVisibilityService = async (
     },
   });
 
-  if (!membership) {
+  if (!membership)
     throw new Error("You are not authorized to access this workspace");
-  }
 
   const document = await Document.findOne({
     where: {
@@ -40,33 +36,26 @@ export const updateDocumentVisibilityService = async (
     },
   });
 
-  if (!document) {
+  if (!document)
     throw new Error("Document not found");
-  }
 
-  // Only the uploader or a workspace admin can change access.
   if (
     membership.role !== "admin" &&
     String(document.userId) !== String(userId)
-  ) {
+  )
     throw new Error("You are not authorized to manage this document");
-  }
 
-  // Validate selected employees.
   if (visibility === "selected") {
-    if (!permissions.length) {
+    if (!permissions.length)
       throw new Error("Select at least one employee");
-    }
 
     const userIds = permissions.map(Number);
 
-    if (userIds.some((id) => !Number.isInteger(id) || id <= 0)) {
+    if (userIds.some((id) => !Number.isInteger(id) || id <= 0))
       throw new Error("Invalid employee ID");
-    }
 
-    if (new Set(userIds).size !== userIds.length) {
+    if (new Set(userIds).size !== userIds.length) 
       throw new Error("Duplicate employees are not allowed");
-    }
 
     const members = await TenantMember.findAll({
       where: {
@@ -77,9 +66,8 @@ export const updateDocumentVisibilityService = async (
       },
     });
 
-    if (members.length !== userIds.length) {
+    if (members.length !== userIds.length)
       throw new Error("One or more selected employees are invalid");
-    }
 
     permissions = userIds;
   }
@@ -87,13 +75,11 @@ export const updateDocumentVisibilityService = async (
   await db.transaction(async (transaction) => {
     await document.update({ visibility }, { transaction });
 
-    // Remove old permissions.
     await DocumentPermission.destroy({
       where: { documentId },
       transaction,
     });
 
-    // Add permissions for selected employees.
     if (visibility === "selected") {
       await DocumentPermission.bulkCreate(
         permissions.map((selectedUserId) => ({
@@ -111,6 +97,7 @@ export const updateDocumentVisibilityService = async (
     visibility,
   };
 };
+
 export const getDocumentAccessService = async (
   documentId,
   tenantId,
@@ -124,9 +111,8 @@ export const getDocumentAccessService = async (
     },
   });
 
-  if (!membership) {
+  if (!membership)
     throw new Error("You are not authorized to access this workspace");
-  }
 
   const document = await Document.findOne({
     where: {
@@ -136,17 +122,10 @@ export const getDocumentAccessService = async (
     attributes: ["id", "userId", "fileName", "visibility"],
   });
 
-  if (!document) {
-    throw new Error("Document not found");
-  }
+  if (!document) throw new Error("Document not found");
 
-  // Only uploader or workspace admin can manage access.
-  if (
-    membership.role !== "admin" &&
-    String(document.userId) !== String(userId)
-  ) {
+  if (membership.role !== "admin" && String(document.userId) !== String(userId))
     throw new Error("You are not authorized to manage this document");
-  }
 
   const permissions = await DocumentPermission.findAll({
     where: { documentId },

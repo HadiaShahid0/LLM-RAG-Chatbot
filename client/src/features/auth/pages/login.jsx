@@ -14,8 +14,8 @@ import {
 } from "../../invitation/services/invitationService.js";
 
 import {
-  getUserTenants,
-  selectTenant,
+  getUserTenantsService,
+  selectTenantService,
 } from "../../chat/services/tenantService.js";
 
 const LoginPage = () => {
@@ -56,32 +56,24 @@ const LoginPage = () => {
     try {
       setLoading(true);
 
-      // Step 1: Login user
       await loginUser(formData);
 
-      // Step 2: Check if user came from an invitation
       const invitationToken = location.state?.invitationToken;
 
       if (invitationToken) {
-        // Accept invitation using existing account
         const result = await acceptExistingInvitation(invitationToken);
 
-        // Fetch user's companies
-        const tenants = await getUserTenants();
+        const tenants = await getUserTenantsService();
 
-        // Find invited company
         const tenant = tenants.find(
           (item) => Number(item.id) === Number(result.tenantId),
         );
 
-        if (!tenant) {
+        if (!tenant)
           throw new Error("Company membership could not be found.");
-        }
 
-        // Select invited company
-        await selectTenant(tenant.id);
+        await selectTenantService(tenant.id);
 
-        // Save active company
         localStorage.setItem(
           "activeTenant",
           JSON.stringify({
@@ -91,12 +83,10 @@ const LoginPage = () => {
           }),
         );
 
-        // Open dashboard
         window.location.assign("/chat");
         return;
       }
 
-      // Step 3: Normal login
       navigate("/select-tenant");
     } catch (error) {
       setError(error.message);

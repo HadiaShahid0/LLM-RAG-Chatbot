@@ -40,7 +40,6 @@ export const TeamInvitationsPage = () => {
   const [error, setError] = useState("");
   const [success, setSuccess] = useState("");
 
-  // Load invitations
   const loadInvitations = async () => {
     try {
       setLoading(true);
@@ -60,7 +59,6 @@ export const TeamInvitationsPage = () => {
     loadInvitations();
   }, []);
 
-  // Invitation statistics
   const pendingCount = invitations.filter(
     (item) => item.status === "pending",
   ).length;
@@ -73,7 +71,6 @@ export const TeamInvitationsPage = () => {
     (item) => item.status === "expired",
   ).length;
 
-  // Form input
   const handleChange = (event) => {
     setFormData({
       ...formData,
@@ -81,7 +78,6 @@ export const TeamInvitationsPage = () => {
     });
   };
 
-  // Send invitation
   const handleSendInvitation = async (event) => {
     event.preventDefault();
 
@@ -117,7 +113,6 @@ export const TeamInvitationsPage = () => {
     }
   };
 
-  // Resend invitation
   const handleResend = async (invitationId) => {
     try {
       setActionId(invitationId);
@@ -136,7 +131,6 @@ export const TeamInvitationsPage = () => {
     }
   };
 
-  // Revoke invitation
   const handleRevoke = async (invitationId) => {
     const confirmed = window.confirm(
       "Are you sure you want to revoke this invitation?",
@@ -161,7 +155,6 @@ export const TeamInvitationsPage = () => {
     }
   };
 
-  // Status badge
   const getStatusBadge = (status) => {
     const statusConfig = {
       pending: {
@@ -198,7 +191,6 @@ export const TeamInvitationsPage = () => {
     );
   };
 
-  // Format date
   const formatDate = (date) => {
     if (!date) return "—";
 
@@ -211,7 +203,6 @@ export const TeamInvitationsPage = () => {
 
   return (
     <div className="container-fluid p-3 p-md-4">
-      {/* Page Header */}
       <div className="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
         <div>
           <div className="d-flex align-items-center gap-2 mb-2">
@@ -252,7 +243,6 @@ export const TeamInvitationsPage = () => {
         </button>
       </div>
 
-      {/* Alerts */}
       {error && (
         <div className="alert alert-danger d-flex align-items-center justify-content-between">
           <span>{error}</span>
@@ -277,7 +267,6 @@ export const TeamInvitationsPage = () => {
         </div>
       )}
 
-      {/* Statistics */}
       <div className="row g-3 mb-4">
         <div className="col-12 col-sm-6 col-xl-3">
           <div className="card border-0 shadow-sm rounded-4 h-100">
@@ -392,7 +381,6 @@ export const TeamInvitationsPage = () => {
         </div>
       </div>
 
-      {/* Invitations Table */}
       <div className="card border-0 shadow-sm rounded-4">
         <div className="card-header bg-white border-0 p-4">
           <div className="d-flex justify-content-between align-items-center flex-wrap gap-2">
@@ -573,7 +561,6 @@ export const TeamInvitationsPage = () => {
         )}
       </div>
 
-      {/* Add Employee Modal */}
       {showModal && (
         <>
           <div
@@ -584,7 +571,6 @@ export const TeamInvitationsPage = () => {
           >
             <div className="modal-dialog modal-dialog-centered">
               <div className="modal-content border-0 rounded-4 shadow-lg">
-                {/* Modal Header */}
                 <div className="modal-header border-0 px-4 pt-4">
                   <div>
                     <div
@@ -616,7 +602,6 @@ export const TeamInvitationsPage = () => {
                   />
                 </div>
 
-                {/* Modal Body */}
                 <form onSubmit={handleSendInvitation}>
                   <div className="modal-body px-4 py-3">
                     <div className="mb-3">
@@ -668,7 +653,6 @@ export const TeamInvitationsPage = () => {
                     </div>
                   </div>
 
-                  {/* Modal Footer */}
                   <div className="modal-footer border-0 px-4 pb-4">
                     <button
                       type="button"
