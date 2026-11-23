@@ -63,7 +63,9 @@ export const resendInvitation = async (invitationId) => {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || data.error || "Failed to resend invitation");
+    throw new Error(
+      data.message || data.error || "Failed to resend invitation",
+    );
   }
 
   return data;
@@ -83,7 +85,9 @@ export const revokeInvitation = async (invitationId) => {
   const data = await response.json();
 
   if (!response.ok) {
-    throw new Error(data.message || data.error || "Failed to revoke invitation");
+    throw new Error(
+      data.message || data.error || "Failed to revoke invitation",
+    );
   }
 
   return data;
@@ -106,24 +110,30 @@ export const acceptExistingInvitation = async (token) => {
 
   return data;
 };
-// Validate invitation
-export const validateInvitation = async (token) => {
-  const response = await fetch(
-    `${API_URL}/invitations/validate/${encodeURIComponent(token)}`,
-    {
-      credentials: "include",
-    },
-  );
+export const validateInvitationService = async (token) => {
+  console.log("Validating invitation...");
+  console.log("Token received:", Boolean(token));
+  console.log("Token length:", token?.length);
 
-  const data = await response.json();
+  const tokenHash = crypto
+    .createHash("sha256")
+    .update(token)
+    .digest("hex");
 
-  if (!response.ok) {
-    throw new Error(data.message || "Invalid or expired invitation");
+  console.log("Token hash generated:", Boolean(tokenHash));
+
+  const invitation = await Invitation.findOne({
+    where: { tokenHash },
+  });
+
+  console.log("Invitation found:", Boolean(invitation));
+
+  if (!invitation) {
+    throw new Error("Invalid invitation link");
   }
 
-  return data;
+  // Keep your remaining validation logic.
 };
-
 // Accept invitation and create employee account
 export const acceptInvitation = async (formData) => {
   const response = await fetch(`${API_URL}/invitations/accept`, {
