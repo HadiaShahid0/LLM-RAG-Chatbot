@@ -33,9 +33,9 @@ const App = () => {
         }
       />
       <Route
-  path="/accept-invitation/:token"
-  element={<AcceptInvitationPage />}
-/>
+        path="/accept-invitation/:token"
+        element={<AcceptInvitationPage />}
+      />
     </Routes>
   );
 };
