@@ -36,7 +36,6 @@ const ChatSidebar = ({
 
   return (
     <aside className="chat-sidebar">
-      {/* Company Workspace */}
       <div className="px-3 py-3 border-bottom">
         <div className="d-flex align-items-center justify-content-between mb-2">
           <div className="d-flex align-items-center gap-2">
@@ -80,7 +79,6 @@ const ChatSidebar = ({
           </span>
         </div>
 
-        {/* Switch Company - Employees Only */}
         {!isAdmin && (
           <button
             type="button"
@@ -93,9 +91,7 @@ const ChatSidebar = ({
         )}
       </div>
 
-      {/* Sidebar Navigation */}
       <div className="new-chat-wrapper">
-        {/* New Chat */}
         <button type="button" className="new-chat-btn" onClick={onNewChat}>
           <span className="new-chat-icon">
             <FiPlus size={18} />
@@ -106,7 +102,6 @@ const ChatSidebar = ({
           <FiChevronRight size={17} className="ms-auto" />
         </button>
 
-        {/* Documents */}
         <button
           type="button"
           className="documents-btn"
@@ -117,10 +112,8 @@ const ChatSidebar = ({
           <FiChevronRight size={17} className="ms-auto" />
         </button>
 
-        {/* Admin Navigation */}
         {isAdmin && (
           <>
-            {/* Employees */}
             <button
               type="button"
               className="documents-btn"
@@ -131,7 +124,6 @@ const ChatSidebar = ({
               <FiChevronRight size={17} className="ms-auto" />
             </button>
 
-            {/* Team Invitations */}
             <button
               type="button"
               className="documents-btn"
@@ -145,7 +137,6 @@ const ChatSidebar = ({
         )}
       </div>
 
-      {/* Conversation List */}
       <div className="conversation-area">
         <div className="conversation-heading">
           <span>Recent conversations</span>
@@ -207,7 +198,6 @@ const ChatSidebar = ({
         </div>
       </div>
 
-      {/* Sidebar Footer */}
       <div className="sidebar-footer">
         <div className="assistant-status">
           <div className="assistant-status-icon">

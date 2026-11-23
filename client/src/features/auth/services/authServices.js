@@ -1,4 +1,5 @@
 const API_URL = "/api";
+
 const handleResponse = async (response) => {
   const text = await response.text();
 
@@ -20,6 +21,7 @@ const handleResponse = async (response) => {
 
   return data;
 };
+
 export const registerUser = async (userData) => {
   const response = await fetch(`${API_URL}/auth/register`, {
     method: "POST",
@@ -45,6 +47,7 @@ export const loginUser = async (loginData) => {
 
   return handleResponse(response);
 };
+
 export const logoutUser = async () => {
   const response = await fetch(`${API_URL}/auth/logout`, {
     method: "POST",

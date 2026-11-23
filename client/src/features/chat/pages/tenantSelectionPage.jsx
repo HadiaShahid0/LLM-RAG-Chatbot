@@ -9,7 +9,7 @@ import {
   FiAlertCircle,
 } from "react-icons/fi";
 
-import { getUserTenants, selectTenant } from "../services/tenantService.js";
+import { getUserTenantsService, selectTenantService } from "../services/tenantService.js";
 
 const TenantSelectionPage = () => {
   const navigate = useNavigate();
@@ -22,7 +22,7 @@ const TenantSelectionPage = () => {
   useEffect(() => {
     const loadTenants = async () => {
       try {
-        const data = await getUserTenants();
+        const data = await getUserTenantsService();
         setTenants(data);
       } catch (error) {
         setError(error.message);
@@ -39,7 +39,7 @@ const TenantSelectionPage = () => {
       setSelecting(tenantId);
       setError("");
 
-      const tenant = await selectTenant(tenantId);
+      const tenant = await selectTenantService(tenantId);
 
       localStorage.setItem("activeTenant", JSON.stringify(tenant));
 
@@ -50,7 +50,6 @@ const TenantSelectionPage = () => {
     }
   };
 
-  // Loading screen
   if (loading) {
     return (
       <div className="min-vh-100 d-flex flex-column justify-content-center align-items-center bg-light">
@@ -67,7 +66,6 @@ const TenantSelectionPage = () => {
   return (
     <div className="min-vh-100 bg-light py-5">
       <div className="container">
-        {/* Header */}
         <div className="text-center mb-5">
           <div
             className="d-inline-flex align-items-center justify-content-center rounded-4 bg-primary bg-opacity-10 text-primary mb-3"
@@ -83,7 +81,6 @@ const TenantSelectionPage = () => {
           </p>
         </div>
 
-        {/* Error Message */}
         {error && (
           <div className="alert alert-danger d-flex align-items-center gap-2 mb-4">
             <FiAlertCircle size={20} />
@@ -91,7 +88,6 @@ const TenantSelectionPage = () => {
           </div>
         )}
 
-        {/* Workspace Cards */}
         {tenants.length === 0 ? (
           <div
             className="card border-0 shadow-sm rounded-4 mx-auto text-center p-5"
@@ -129,7 +125,6 @@ const TenantSelectionPage = () => {
                       style={{ transition: "0.2s ease" }}
                     >
                       <div className="card-body p-4">
-                        {/* Workspace Icon and Role */}
                         <div className="d-flex justify-content-between align-items-start mb-4">
                           <div
                             className="d-flex align-items-center justify-content-center rounded-3 bg-primary bg-opacity-10 text-white"
@@ -146,7 +141,7 @@ const TenantSelectionPage = () => {
                             }`}
                           >
                             {isAdmin ? (
-                              <FiShield className="me-1 text-white"  />
+                              <FiShield className="me-1 text-white" />
                             ) : (
                               <FiUsers className="me-1 text-white" />
                             )}
@@ -154,7 +149,6 @@ const TenantSelectionPage = () => {
                           </span>
                         </div>
 
-                        {/* Workspace Details */}
                         <h5 className="fw-bold mb-2 ">{tenant.name}</h5>
 
                         <p className="text-muted small mb-4">
@@ -163,7 +157,6 @@ const TenantSelectionPage = () => {
                             : "Access your company workspace and shared documents."}
                         </p>
 
-                        {/* Select Button */}
                         <button
                           className="btn btn-primary w-100 rounded-3 py-2 d-flex align-items-center justify-content-center gap-2"
                           disabled={selecting !== null}
@@ -193,7 +186,6 @@ const TenantSelectionPage = () => {
           </>
         )}
 
-        {/* Footer */}
         <div className="text-center mt-5">
           <p className="text-muted small mb-0">
             <FiCheckCircle className="text-success me-1" />

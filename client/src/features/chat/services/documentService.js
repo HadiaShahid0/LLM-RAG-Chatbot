@@ -1,6 +1,5 @@
 const API_URL = "/api";
 
-// Get documents
 export const getDocumentsService = async () => {
   const tenant = JSON.parse(localStorage.getItem("activeTenant"));
 
@@ -13,14 +12,11 @@ export const getDocumentsService = async () => {
 
   const data = await response.json();
 
-  if (!response.ok) {
-    throw new Error(data.error || "Failed to fetch documents");
-  }
+  if (!response.ok) throw new Error(data.error || "Failed to fetch documents");
 
   return data.documents;
 };
 
-// Upload document with access settings
 export const uploadDocumentService = async (file, accessSettings) => {
   const tenant = JSON.parse(localStorage.getItem("activeTenant"));
 
@@ -44,14 +40,11 @@ export const uploadDocumentService = async (file, accessSettings) => {
 
   const data = await response.json();
 
-  if (!response.ok) {
-    throw new Error(data.error || "Failed to upload document");
-  }
+  if (!response.ok) throw new Error(data.error || "Failed to upload document");
 
   return data.document;
 };
 
-// Delete document
 export const deleteDocumentService = async (documentId) => {
   const tenant = JSON.parse(localStorage.getItem("activeTenant"));
 
@@ -65,9 +58,7 @@ export const deleteDocumentService = async (documentId) => {
 
   const data = await response.json();
 
-  if (!response.ok) {
-    throw new Error(data.error || "Failed to delete document");
-  }
+  if (!response.ok) throw new Error(data.error || "Failed to delete document");
 
   return data;
 };

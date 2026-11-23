@@ -18,7 +18,7 @@ import {
 import "./documentPage.css";
 
 import ManageDocumentAccess from "../components/documents/manageDocumentAccess";
-import { getTenantEmployees } from "../services/tenantService.js";
+import { getTenantEmployeesService } from "../services/tenantService.js";
 
 const DocumentsPage = ({
   documents = [],
@@ -30,23 +30,19 @@ const DocumentsPage = ({
   const fileInputRef = useRef(null);
   const uploadInProgressRef = useRef(false);
 
-  // General states
   const [search, setSearch] = useState("");
   const [selectedFiles, setSelectedFiles] = useState([]);
   const [isDragging, setIsDragging] = useState(false);
   const [successMessage, setSuccessMessage] = useState("");
   const [selectedDocument, setSelectedDocument] = useState(null);
 
-  // Upload modal states
   const [showUploadModal, setShowUploadModal] = useState(false);
   const [uploadVisibility, setUploadVisibility] = useState("private");
   const [selectedEmployeeIds, setSelectedEmployeeIds] = useState([]);
 
-  // Employee states
   const [employees, setEmployees] = useState([]);
   const [loadingEmployees, setLoadingEmployees] = useState(false);
 
-  // Format file size
   const formatFileSize = (bytes) => {
     if (bytes < 1024) return `${bytes} B`;
 
@@ -57,7 +53,6 @@ const DocumentsPage = ({
     return `${(bytes / (1024 * 1024)).toFixed(2)} MB`;
   };
 
-  // Format date
   const formatDate = (date) => {
     if (!date) return "N/A";
 
@@ -68,7 +63,6 @@ const DocumentsPage = ({
     });
   };
 
-  // Load active employees when upload modal opens
   useEffect(() => {
     if (!showUploadModal) return;
 
@@ -76,7 +70,7 @@ const DocumentsPage = ({
       try {
         setLoadingEmployees(true);
 
-        const data = await getTenantEmployees();
+        const data = await getTenantEmployeesService();
 
         setEmployees(data || []);
       } catch (error) {
@@ -90,13 +84,10 @@ const DocumentsPage = ({
     loadEmployees();
   }, [showUploadModal]);
 
-  // Handle file selection
   const handleFileUpload = (files) => {
     const selected = Array.from(files || []);
 
-    const pdfFiles = selected.filter(
-      (file) => file.type === "application/pdf",
-    );
+    const pdfFiles = selected.filter((file) => file.type === "application/pdf");
 
     if (pdfFiles.length === 0) {
       alert("Please select valid PDF files.");
@@ -127,12 +118,10 @@ const DocumentsPage = ({
     }
   };
 
-  // Remove selected file
   const removeSelectedFile = (index) => {
     setSelectedFiles((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Close upload modal
   const closeUploadModal = () => {
     if (uploading || uploadInProgressRef.current) return;
 
@@ -142,7 +131,6 @@ const DocumentsPage = ({
     setUploadVisibility("private");
   };
 
-  // Handle selected employee changes
   const handleEmployeeChange = (userId) => {
     const id = String(userId);
 
@@ -155,20 +143,11 @@ const DocumentsPage = ({
     });
   };
 
-  // Upload files with visibility settings
   const handleUpload = async () => {
-    if (
-      !selectedFiles.length ||
-      uploading ||
-      uploadInProgressRef.current
-    ) {
+    if (!selectedFiles.length || uploading || uploadInProgressRef.current)
       return;
-    }
 
-    if (
-      uploadVisibility === "selected" &&
-      selectedEmployeeIds.length === 0
-    ) {
+    if (uploadVisibility === "selected" && selectedEmployeeIds.length === 0) {
       alert("Please select at least one employee.");
       return;
     }
@@ -198,7 +177,6 @@ const DocumentsPage = ({
     }
   };
 
-  // Handle drag and drop
   const handleDrop = (e) => {
     e.preventDefault();
     setIsDragging(false);
@@ -206,7 +184,6 @@ const DocumentsPage = ({
     handleFileUpload(e.dataTransfer.files);
   };
 
-  // Document status
   const getStatus = (status) => {
     switch (status?.toLowerCase()) {
       case "completed":
@@ -232,18 +209,15 @@ const DocumentsPage = ({
     }
   };
 
-  // Search documents
   const filteredDocuments = documents.filter((doc) =>
     doc.fileName?.toLowerCase().includes(search.toLowerCase()),
   );
 
-  // Check whether the action column is needed
   const showActionColumn =
     isAdmin || filteredDocuments.some((doc) => doc.isOwner);
 
   return (
     <div className="documents-page">
-      {/* Page Header */}
       <div className="documents-header">
         <div>
           <h2>My Documents</h2>
@@ -255,7 +229,6 @@ const DocumentsPage = ({
         </div>
       </div>
 
-      {/* Upload Section */}
       <div
         className={`document-upload-box ${isDragging ? "dragging" : ""}`}
         onDragOver={(e) => {
@@ -271,9 +244,7 @@ const DocumentsPage = ({
 
         <h5>Upload your documents</h5>
 
-        <p>
-          Drag and drop your PDF files here, or browse your computer.
-        </p>
+        <p>Drag and drop your PDF files here, or browse your computer.</p>
 
         <button
           type="button"
@@ -297,7 +268,6 @@ const DocumentsPage = ({
         />
       </div>
 
-      {/* Upload Modal */}
       {showUploadModal && (
         <div
           className="modal d-block"
@@ -308,12 +278,9 @@ const DocumentsPage = ({
         >
           <div className="modal-dialog modal-dialog-centered modal-lg">
             <div className="modal-content border-0 shadow rounded-4">
-              {/* Modal Header */}
               <div className="modal-header px-4">
                 <div>
-                  <h5 className="modal-title fw-bold">
-                    Upload Documents
-                  </h5>
+                  <h5 className="modal-title fw-bold">Upload Documents</h5>
 
                   <small className="text-muted">
                     Review your files and configure document access.
@@ -328,9 +295,7 @@ const DocumentsPage = ({
                 />
               </div>
 
-              {/* Modal Body */}
               <div className="modal-body p-4">
-                {/* Selected Files */}
                 <h6 className="fw-semibold mb-3">
                   Selected Files ({selectedFiles.length})
                 </h6>
@@ -368,14 +333,12 @@ const DocumentsPage = ({
                   ))}
                 </div>
 
-                {/* Document Access */}
                 <h6 className="fw-semibold mb-3">
                   <FiShield className="me-2" />
                   Document Access
                 </h6>
 
                 <div className="d-flex flex-column gap-2">
-                  {/* Private */}
                   <label
                     className={`border rounded-3 p-3 d-flex gap-3 align-items-center ${
                       uploadVisibility === "private"
@@ -399,13 +362,12 @@ const DocumentsPage = ({
                       <div className="fw-semibold">Private</div>
 
                       <small className="text-muted">
-                        Only the uploader and workspace admins can access
-                        this document.
+                        Only the uploader and workspace admins can access this
+                        document.
                       </small>
                     </div>
                   </label>
 
-                  {/* All Employees */}
                   <label
                     className={`border rounded-3 p-3 d-flex gap-3 align-items-center ${
                       uploadVisibility === "employee"
@@ -429,13 +391,12 @@ const DocumentsPage = ({
                       <div className="fw-semibold">All Employees</div>
 
                       <small className="text-muted">
-                        All active employees in this workspace can access
-                        this document.
+                        All active employees in this workspace can access this
+                        document.
                       </small>
                     </div>
                   </label>
 
-                  {/* Admin Only - Employee Dashboard */}
                   {!isAdmin && (
                     <label
                       className={`border rounded-3 p-3 d-flex gap-3 align-items-center ${
@@ -460,14 +421,13 @@ const DocumentsPage = ({
                         <div className="fw-semibold">Admin Only</div>
 
                         <small className="text-muted">
-                          Only the uploader and workspace admins can access
-                          this document.
+                          Only the uploader and workspace admins can access this
+                          document.
                         </small>
                       </div>
                     </label>
                   )}
 
-                  {/* Selected Employees */}
                   <label
                     className={`border rounded-3 p-3 d-flex gap-3 align-items-center ${
                       uploadVisibility === "selected"
@@ -488,42 +448,32 @@ const DocumentsPage = ({
                     <FiUsers size={21} className="text-primary" />
 
                     <div>
-                      <div className="fw-semibold">
-                        Selected Employees
-                      </div>
+                      <div className="fw-semibold">Selected Employees</div>
 
                       <small className="text-muted">
-                        Only selected employees, the uploader, and
-                        workspace admins can access this document.
+                        Only selected employees, the uploader, and workspace
+                        admins can access this document.
                       </small>
                     </div>
                   </label>
                 </div>
 
-                {/* Selected Employees */}
                 {uploadVisibility === "selected" && (
                   <div className="mt-4">
-                    <h6 className="fw-semibold mb-2">
-                      Select Employees
-                    </h6>
+                    <h6 className="fw-semibold mb-2">Select Employees</h6>
 
                     <p className="text-muted small">
-                      Choose which active employees can access this
-                      document.
+                      Choose which active employees can access this document.
                     </p>
 
                     {loadingEmployees ? (
                       <div className="text-center py-3">
                         <div className="spinner-border spinner-border-sm" />
 
-                        <span className="ms-2">
-                          Loading employees...
-                        </span>
+                        <span className="ms-2">Loading employees...</span>
                       </div>
                     ) : employees.length === 0 ? (
-                      <p className="text-muted">
-                        No active employees found.
-                      </p>
+                      <p className="text-muted">No active employees found.</p>
                     ) : (
                       employees.map((employee) => {
                         const isSelected = selectedEmployeeIds.includes(
@@ -565,7 +515,6 @@ const DocumentsPage = ({
                 )}
               </div>
 
-              {/* Modal Footer */}
               <div className="modal-footer px-4">
                 <button
                   type="button"
@@ -598,7 +547,6 @@ const DocumentsPage = ({
         </div>
       )}
 
-      {/* Success Message */}
       {successMessage && (
         <div className="upload-success-message">
           <FiCheckCircle size={18} />
@@ -606,7 +554,6 @@ const DocumentsPage = ({
         </div>
       )}
 
-      {/* Uploaded Documents */}
       <div className="documents-list-section">
         <div className="documents-list-header">
           <div>
@@ -615,7 +562,6 @@ const DocumentsPage = ({
             <span>{documents.length} files in your workspace</span>
           </div>
 
-          {/* Search */}
           <div className="document-search">
             <FiSearch size={17} />
 
@@ -627,17 +573,13 @@ const DocumentsPage = ({
             />
 
             {search && (
-              <button
-                type="button"
-                onClick={() => setSearch("")}
-              >
+              <button type="button" onClick={() => setSearch("")}>
                 <FiX size={16} />
               </button>
             )}
           </div>
         </div>
 
-        {/* Empty State */}
         {filteredDocuments.length === 0 ? (
           <div className="documents-empty">
             <div className="empty-document-icon">
@@ -657,7 +599,6 @@ const DocumentsPage = ({
             </p>
           </div>
         ) : (
-          /* Documents Table */
           <div className="documents-table-wrapper">
             <table className="documents-table">
               <thead>
@@ -674,9 +615,6 @@ const DocumentsPage = ({
               <tbody>
                 {filteredDocuments.map((doc) => {
                   const status = getStatus(doc.status);
-
-                  // Admin can manage all documents.
-                  // Employees can manage their own documents.
                   const canManage = isAdmin || doc.isOwner;
 
                   return (
@@ -707,20 +645,16 @@ const DocumentsPage = ({
                       </td>
 
                       <td>
-                        <span
-                          className={`document-status ${status.className}`}
-                        >
+                        <span className={`document-status ${status.className}`}>
                           {status.icon}
                           {status.label}
                         </span>
                       </td>
 
-                      {/* Actions */}
                       {showActionColumn && (
                         <td>
                           {canManage && (
                             <div className="d-flex align-items-center">
-                              {/* Manage Document Access */}
                               <button
                                 type="button"
                                 className="document-delete-btn me-2"
@@ -730,7 +664,6 @@ const DocumentsPage = ({
                                 <FiShield size={17} />
                               </button>
 
-                              {/* Delete Document */}
                               <button
                                 type="button"
                                 className="document-delete-btn"
@@ -752,7 +685,6 @@ const DocumentsPage = ({
         )}
       </div>
 
-      {/* Manage Existing Document Access */}
       {selectedDocument && (
         <ManageDocumentAccess
           document={selectedDocument}

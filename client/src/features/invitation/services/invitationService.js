@@ -15,7 +15,6 @@ const getTenantHeaders = () => {
   };
 };
 
-// Send invitation
 export const createInvitation = async ({ email, message }) => {
   const response = await fetch(`${API_URL}/invitations`, {
     method: "POST",
@@ -33,7 +32,6 @@ export const createInvitation = async ({ email, message }) => {
   return data;
 };
 
-// Get workspace invitations
 export const getInvitations = async () => {
   const response = await fetch(`${API_URL}/invitations`, {
     headers: getTenantHeaders(),
@@ -49,7 +47,6 @@ export const getInvitations = async () => {
   return data.invitations;
 };
 
-// Resend invitation
 export const resendInvitation = async (invitationId) => {
   const response = await fetch(
     `${API_URL}/invitations/${invitationId}/resend`,
@@ -69,7 +66,6 @@ export const resendInvitation = async (invitationId) => {
   return data;
 };
 
-// Revoke invitation
 export const revokeInvitation = async (invitationId) => {
   const response = await fetch(
     `${API_URL}/invitations/${invitationId}/revoke`,
@@ -106,7 +102,7 @@ export const acceptExistingInvitation = async (token) => {
 
   return data;
 };
-// Validate invitation
+
 export const validateInvitationService = async (token) => {
   const response = await fetch(
     `${API_URL}/invitations/validate/${encodeURIComponent(token)}`,

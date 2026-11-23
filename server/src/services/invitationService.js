@@ -28,9 +28,7 @@ export const createInvitationService = async (
     },
   });
 
-  if (!admin) {
-    throw new Error("Only workspace admins can invite employees");
-  }
+  if (!admin) throw new Error("Only workspace admins can invite employees");
 
   const user = await User.findOne({
     where: { email: normalizedEmail },
@@ -44,9 +42,8 @@ export const createInvitationService = async (
       },
     });
 
-    if (existingMember) {
+    if (existingMember)
       throw new Error("This user already belongs to this workspace");
-    }
   }
 
   const existingInvitation = await Invitation.findOne({
@@ -57,9 +54,8 @@ export const createInvitationService = async (
     },
   });
 
-  if (existingInvitation) {
+  if (existingInvitation)
     throw new Error("An invitation is already pending for this email");
-  }
 
   const token = crypto.randomBytes(32).toString("hex");
 
@@ -114,7 +110,6 @@ export const createInvitationService = async (
 };
 
 export const getInvitationsService = async (tenantId, adminId) => {
-  // Verify admin
   const admin = await TenantMember.findOne({
     where: {
       tenantId,
@@ -124,11 +119,8 @@ export const getInvitationsService = async (tenantId, adminId) => {
     },
   });
 
-  if (!admin) {
-    throw new Error("Only workspace admins can view invitations");
-  }
+  if (!admin) throw new Error("Only workspace admins can view invitations");
 
-  // Update expired invitations
   await Invitation.update(
     { status: "expired" },
     {
@@ -142,7 +134,6 @@ export const getInvitationsService = async (tenantId, adminId) => {
     },
   );
 
-  // Fetch invitations
   return await Invitation.findAll({
     where: { tenantId },
     attributes: [
@@ -173,9 +164,7 @@ export const resendInvitationService = async (
     },
   });
 
-  if (!admin) {
-    throw new Error("Only workspace admins can resend invitations");
-  }
+  if (!admin) throw new Error("Only workspace admins can resend invitations");
 
   const invitation = await Invitation.findOne({
     where: {
@@ -184,13 +173,10 @@ export const resendInvitationService = async (
     },
   });
 
-  if (!invitation) {
-    throw new Error("Invitation not found");
-  }
+  if (!invitation) throw new Error("Invitation not found");
 
-  if (!["pending", "expired"].includes(invitation.status)) {
+  if (!["pending", "expired"].includes(invitation.status))
     throw new Error("This invitation cannot be resent");
-  }
 
   const token = crypto.randomBytes(32).toString("hex");
 
@@ -208,7 +194,6 @@ export const resendInvitationService = async (
     message: invitation.message,
   });
 
-  // Send email before replacing the existing token
   await sendEmailService({
     to: invitation.email,
     subject: `Invitation to join ${tenant.name}`,
@@ -241,9 +226,7 @@ export const revokeInvitationService = async (
     },
   });
 
-  if (!admin) {
-    throw new Error("Only workspace admins can revoke invitations");
-  }
+  if (!admin) throw new Error("Only workspace admins can revoke invitations");
 
   const invitation = await Invitation.findOne({
     where: {
@@ -252,13 +235,10 @@ export const revokeInvitationService = async (
     },
   });
 
-  if (!invitation) {
-    throw new Error("Invitation not found");
-  }
+  if (!invitation) throw new Error("Invitation not found");
 
-  if (invitation.status !== "pending") {
+  if (invitation.status !== "pending")
     throw new Error("Only pending invitations can be revoked");
-  }
 
   await invitation.update({
     status: "revoked",
@@ -282,13 +262,10 @@ export const validateInvitationService = async (token) => {
   });
   console.log("Invitation found:", Boolean(invitation));
 
-  if (!invitation) {
-    throw new Error("Invalid invitation link");
-  }
+  if (!invitation) throw new Error("Invalid invitation link");
 
-  if (invitation.status !== "pending") {
+  if (invitation.status !== "pending")
     throw new Error("This invitation is no longer active");
-  }
 
   if (new Date(invitation.expiresAt) <= new Date()) {
     await invitation.update({ status: "expired" });
@@ -297,9 +274,7 @@ export const validateInvitationService = async (token) => {
 
   const tenant = await Tenant.findByPk(invitation.tenantId);
 
-  if (!tenant) {
-    throw new Error("Company not found");
-  }
+  if (!tenant) throw new Error("Company not found");
 
   const existingUser = await User.findOne({
     where: { email: invitation.email },
@@ -313,6 +288,7 @@ export const validateInvitationService = async (token) => {
     expiresAt: invitation.expiresAt,
   };
 };
+
 export const acceptInvitationService = async (token, username, password) => {
   const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
 
@@ -329,18 +305,16 @@ export const acceptInvitationService = async (token, username, password) => {
       lock: transaction.LOCK.UPDATE,
     });
 
-    if (!invitation) {
+    if (!invitation)
       throw new Error("Invalid or expired invitation");
-    }
 
     const existingUser = await User.findOne({
       where: { email: invitation.email },
       transaction,
     });
 
-    if (existingUser) {
+    if (existingUser)
       throw new Error("An account already exists. Please log in.");
-    }
 
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -404,15 +378,14 @@ export const acceptExistingInvitationService = async (token, userId) => {
       lock: transaction.LOCK.UPDATE,
     });
 
-    if (!invitation) {
+    if (!invitation) 
       throw new Error("Invalid or expired invitation");
-    }
+    
 
     const user = await User.findByPk(userId, { transaction });
 
-    if (!user || user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+    if (!user || user.email.toLowerCase() !== invitation.email.toLowerCase())
       throw new Error("Your account email does not match the invitation");
-    }
 
     const existingMembership = await TenantMember.findOne({
       where: {
@@ -422,9 +395,8 @@ export const acceptExistingInvitationService = async (token, userId) => {
       transaction,
     });
 
-    if (existingMembership) {
+    if (existingMembership)
       throw new Error("You already belong to this company");
-    }
 
     await TenantMember.create(
       {

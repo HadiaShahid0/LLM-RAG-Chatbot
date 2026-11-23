@@ -19,6 +19,7 @@ import { uploadFileToGemini } from "./geminiServices.js";
 import { generateGeminiResponseWithTools } from "../agents/langchainAgent.js";
 import { getRelevantDocumentChunksService } from "../tools/toolService.js";
 import supabase, { BUCKET_NAME } from "../config/supabase.js";
+
 const generateConversationTitle = async (
   content,
   selectedModel,
@@ -276,7 +277,6 @@ export const createMessageService = async (
   let storagePath = null;
   let uploadedFile = null;
 
-  // Upload attachment to Supabase Storage
   if (file) {
     if (!file.buffer) {
       throw new Error("Uploaded file buffer is missing");
@@ -293,13 +293,11 @@ export const createMessageService = async (
         upsert: false,
       });
 
-    if (error) {
+    if (error)
       throw new Error(`Supabase upload failed: ${error.message}`);
-    }
   }
 
   try {
-    // Upload attachment to Gemini when Gemini is selected
     if (file && selectedModel === "gemini") {
       uploadedFile = await uploadFileToGemini(file);
     }
@@ -357,7 +355,6 @@ export const createMessageService = async (
         : null,
     };
   } catch (error) {
-    // Remove uploaded file if message creation or processing fails
     if (storagePath) {
       const { error: deleteError } = await supabase.storage
         .from(BUCKET_NAME)

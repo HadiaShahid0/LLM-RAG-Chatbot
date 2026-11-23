@@ -14,16 +14,23 @@ import ChatSidebar from "../components/chatSidebar";
 import MessageList from "../components/messageList";
 import MessageInput from "../components/messageInput";
 import DocumentsPage from "./documentPage";
+
 import "./chatPage.css";
+
 import EmployeesPage from "./employeePage.jsx";
+
 import { FiMenu } from "react-icons/fi";
+
 import { TeamInvitationsPage } from "../../invitation/page/teamInvitationsPage.jsx";
+import { useNavigate } from "react-router-dom";
 import {
   getDocumentsService,
   uploadDocumentService,
   deleteDocumentService,
 } from "../services/documentService.js";
+
 const ChatPage = () => {
+  const navigate=useNavigate()
   const [conversations, setConversations] = useState([]);
   const [activeConversationId, setActiveConversationId] = useState(null);
 
@@ -36,6 +43,7 @@ const ChatPage = () => {
   const [documents, setDocuments] = useState([]);
   const [uploading, setUploading] = useState(false);
   const [currentPage, setCurrentPage] = useState("chat");
+
   const [activeTenant, setActiveTenant] = useState(() => {
     const savedTenant = localStorage.getItem("activeTenant");
     return savedTenant ? JSON.parse(savedTenant) : null;
@@ -99,6 +107,7 @@ const ChatPage = () => {
       console.error(error);
     }
   };
+
   const handleSelectConversation = async (conversationId) => {
     setActiveConversationId(conversationId);
 
@@ -289,7 +298,16 @@ const ChatPage = () => {
       ),
     );
   };
+  useEffect(() => {
+    if (currentPage !== "documents") return;
+    loadDocuments();
 
+    const interval = setInterval(() => {
+      loadDocuments();
+    }, 2000);
+
+    return () => clearInterval(interval);
+  }, [currentPage]);
   const loadDocuments = async () => {
     try {
       const data = await getDocumentsService();
@@ -306,7 +324,6 @@ const ChatPage = () => {
       for (const file of files) {
         await uploadDocumentService(file, accessSettings);
 
-        // Refresh immediately after each file is uploaded.
         await loadDocuments();
       }
     } catch (error) {
@@ -317,6 +334,7 @@ const ChatPage = () => {
       await loadDocuments();
     }
   };
+
   const handleDelete = async (documentId) => {
     const confirmed = window.confirm(
       "Are you sure you want to delete this document",
@@ -329,19 +347,7 @@ const ChatPage = () => {
       console.error("Document delete error: ", error);
     }
   };
-  useEffect(() => {
-    if (currentPage !== "documents") return;
 
-    // Fetch immediately when the Documents tab opens.
-    loadDocuments();
-
-    // Keep refreshing to detect status changes.
-    const interval = setInterval(() => {
-      loadDocuments();
-    }, 2000);
-
-    return () => clearInterval(interval);
-  }, [currentPage]);
   const handleOpenEmployees = () => {
     setCurrentPage("employees");
   };

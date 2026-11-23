@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import {
-  getTenantEmployees,
-  getDocumentAccess,
-  updateDocumentVisibility,
+  getTenantEmployeesService,
+  getDocumentAccessService,
+  updateDocumentVisibilityService,
 } from "../../services/tenantService.js";
 
 const ManageDocumentAccess = ({ document, onClose }) => {
@@ -20,14 +20,13 @@ const ManageDocumentAccess = ({ document, onClose }) => {
         setError("");
 
         const [employeeList, accessData] = await Promise.all([
-          getTenantEmployees(),
-          getDocumentAccess(document.id),
+          getTenantEmployeesService(),
+          getDocumentAccessService(document.id),
         ]);
 
         setEmployees(employeeList);
         setVisibility(accessData.document.visibility);
 
-        // Get only the selected employee IDs.
         setSelectedEmployeeIds(
           accessData.permissions.map((permission) =>
             String(permission.userId ?? permission),
@@ -60,10 +59,9 @@ const ManageDocumentAccess = ({ document, onClose }) => {
       setSaving(true);
       setError("");
 
-      const permissions =
-        visibility === "selected" ? selectedEmployeeIds : [];
+      const permissions = visibility === "selected" ? selectedEmployeeIds : [];
 
-      await updateDocumentVisibility(
+      await updateDocumentVisibilityService(
         document.id,
         visibility,
         permissions,
@@ -108,30 +106,20 @@ const ManageDocumentAccess = ({ document, onClose }) => {
           <div className="modal-body">
             <h6>{document.fileName}</h6>
 
-            {error && (
-              <div className="alert alert-danger">{error}</div>
-            )}
+            {error && <div className="alert alert-danger">{error}</div>}
 
-            <label className="form-label mt-3">
-              Document Visibility
-            </label>
+            <label className="form-label mt-3">Document Visibility</label>
 
             <select
               className="form-select"
               value={visibility}
               onChange={(e) => setVisibility(e.target.value)}
             >
-              <option value="private">
-                Private (Uploader and Admin)
-              </option>
+              <option value="private">Private (Uploader and Admin)</option>
 
-              <option value="employee">
-                All Employees
-              </option>
+              <option value="employee">All Employees</option>
 
-              <option value="selected">
-                Selected Employees
-              </option>
+              <option value="selected">Selected Employees</option>
             </select>
 
             {visibility === "selected" && (
@@ -139,14 +127,12 @@ const ManageDocumentAccess = ({ document, onClose }) => {
                 <h6>Select Employees</h6>
 
                 <p className="text-muted small">
-                  Only the selected employees, document uploader,
-                  and workspace admin can access this document.
+                  Only the selected employees, document uploader, and workspace
+                  admin can access this document.
                 </p>
 
                 {employees.length === 0 ? (
-                  <p className="text-muted">
-                    No active employees found.
-                  </p>
+                  <p className="text-muted">No active employees found.</p>
                 ) : (
                   employees.map((employee) => {
                     const isSelected = selectedEmployeeIds.includes(
@@ -162,9 +148,7 @@ const ManageDocumentAccess = ({ document, onClose }) => {
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() =>
-                              handleEmployeeChange(employee.id)
-                            }
+                            onChange={() => handleEmployeeChange(employee.id)}
                           />
 
                           <div>
@@ -203,8 +187,7 @@ const ManageDocumentAccess = ({ document, onClose }) => {
               onClick={handleSave}
               disabled={
                 saving ||
-                (visibility === "selected" &&
-                  selectedEmployeeIds.length === 0)
+                (visibility === "selected" && selectedEmployeeIds.length === 0)
               }
             >
               {saving ? "Saving..." : "Save Changes"}
