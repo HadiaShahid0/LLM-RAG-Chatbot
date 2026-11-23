@@ -3,10 +3,7 @@ import DocumentPermission from "../models/documentPermissionModel.js";
 import TenantMember from "../models/tenantMemberModel.js";
 import { Op } from "sequelize";
 
-export const getAuthorizedDocumentIdsService = async (
-  userId,
-  tenantId,
-) => {
+export const getAuthorizedDocumentIdsService = async (userId, tenantId) => {
   const membership = await TenantMember.findOne({
     where: {
       userId,
