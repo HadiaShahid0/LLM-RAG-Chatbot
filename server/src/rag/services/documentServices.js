@@ -67,6 +67,7 @@ export const storePDFInQdrantService = async ({
 
     const embedding = await generateDocumentEmbeddingService(
       chunks[i].pageContent,
+      tenantId
     );
 
     embeddings.push(embedding);

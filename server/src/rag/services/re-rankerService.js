@@ -16,7 +16,9 @@ const loadRerankerModel = async () => {
     tokenizer = await AutoTokenizer.from_pretrained(modelName);
 
     rerankerModel =
-      await AutoModelForSequenceClassification.from_pretrained(modelName);
+      await AutoModelForSequenceClassification.from_pretrained(modelName,{
+        dtype:"fp32"
+      });
   }
 
   return { tokenizer, rerankerModel };

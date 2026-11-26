@@ -1,6 +1,11 @@
 import { rerankChunksService } from "../rag/services/re-rankerService.js";
 import { hybridSearchService } from "../rag/services/hybridSearch.js";
 import { getAuthorizedDocumentIdsService } from "../services/documentPermissionService.js";
+import {
+  getRetrievalCacheKeyService,
+  getRetrievalCacheService,
+  saveRetrievalCacheService,
+} from "../cacheServices/retrievalCacheService.js";
 
 export const searchWikipedia = async ({ topic }) => {
   const url = `https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(topic)}&format=json`;
@@ -34,15 +39,33 @@ export const getRelevantDocumentChunksService = async (
 
   if (!question?.trim()) return [];
 
-  if (!userId || !tenantId) throw new Error("User Id and Tenant Id is required for document Retrieval");
+  if (!userId || !tenantId)
+    throw new Error("User Id and Tenant Id is required for document Retrieval");
 
   try {
-    const allowedDocumentIds=await getAuthorizedDocumentIdsService(userId,tenantId)
+    const allowedDocumentIds = await getAuthorizedDocumentIdsService(
+      userId,
+      tenantId,
+    );
 
-    if(allowedDocumentIds.length===0){
-      console.log("No authorized documents available")
-      return []
+    if (allowedDocumentIds.length === 0) {
+      console.log("No authorized documents available");
+      return [];
     }
+
+    const cacheParams = {
+      question,
+      userId,
+      tenantId,
+      allowedDocumentIds,
+      topK,
+    };
+
+    const cacheKey = getRetrievalCacheKeyService(cacheParams);
+
+    const cachedResults = await getRetrievalCacheService(cacheKey);
+
+    if (cachedResults !== null) return cachedResults;
 
     const candidateChunks = await hybridSearchService({
       question,
@@ -85,57 +108,13 @@ export const getRelevantDocumentChunksService = async (
       return chunk.rerankScore >= threshold;
     });
 
-    const rejectedChunks = rerankedChunks.filter((chunk) => {
-      return chunk.rerankScore < threshold;
-    });
     console.log(`Re-ranking selected ${rerankedChunks.length} chunks.`);
-    console.log("\n========== ACCEPTED CHUNKS ==========");
-    console.log(`Accepted: ${relevantChunks.length}`);
 
-    console.log(
-      JSON.stringify(
-        relevantChunks.map((chunk, index) => ({
-          rank: index + 1,
-          id: chunk.id,
-          text: chunk.text,
-          metadata: chunk.metadata,
-          score: chunk.score,
-          vectorRank: chunk.vectorRank,
-          keywordRank: chunk.keywordRank,
-          rrfScore: chunk.rrfScore,
-          rerankScore: chunk.rerankScore,
-          status: "ACCEPTED",
-        })),
-        null,
-        2,
-      ),
-    );
-
-    // Step 7: Display rejected chunks
-    console.log("\n========== REJECTED CHUNKS ==========");
-    console.log(`Rejected: ${rejectedChunks.length}`);
-
-    console.log(
-      JSON.stringify(
-        rejectedChunks.map((chunk, index) => ({
-          rank: index + 1,
-          id: chunk.id,
-          text: chunk.text,
-          metadata: chunk.metadata,
-          score: chunk.score,
-          rrfScore: chunk.rrfScore,
-          rerankScore: chunk.rerankScore,
-          status: "REJECTED",
-        })),
-        null,
-        2,
-      ),
-    );
+    await saveRetrievalCacheService(cacheParams, relevantChunks);
 
     console.log(`Score threshold: ${threshold}`);
     console.log(`Chunks before thresholding: ${rerankedChunks.length}`);
     console.log(`Chunks after thresholding: ${relevantChunks.length}`);
-    console.log(`Chunks rejected: ${rejectedChunks.length}`);
 
     return relevantChunks;
   } catch (error) {

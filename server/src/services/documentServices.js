@@ -12,6 +12,7 @@ import { searchDocuments } from "../tools/toolRegistoery.js";
 import { getAuthorizedDocumentIdsService } from "./documentPermissionService.js";
 import supabase, { BUCKET_NAME } from "../config/supabase.js";
 import TenantMember from "../models/tenantMemberModel.js";
+import { model as geminiModel, groqModel } from "../config/langchain.js";
 
 export const getDocumentsService = async (userId, tenantId) => {
   const allowedDocumentIds = await getAuthorizedDocumentIdsService(
@@ -208,6 +209,7 @@ export const routeDocumentQuestionService = async (
   userId,
   tenantId,
   conversationContext = "",
+  selectedModel = "gemini",
 ) => {
   const documents = await getDocumentCatalogService(userId, tenantId);
   if (Array.isArray(question)) {
@@ -298,7 +300,8 @@ Return ONLY valid JSON. Do not include explanations.
 `;
 
   try {
-    const response = await model.invoke(prompt);
+    const selectedLLMModel = selectedModel === "groq" ? groqModel : geminiModel;
+    const response = await selectedLLMModel.invoke(prompt);
 
     const content =
       typeof response.content === "string"
@@ -326,6 +329,7 @@ export const retrieveDocumentContextService = async (
   userId,
   tenantId,
   conversationContext = "",
+  selectedModel="gemini"
 ) => {
   if (!userId || !tenantId)
     throw new Error("User Id and TenantId are required");
@@ -335,6 +339,7 @@ export const retrieveDocumentContextService = async (
     userId,
     tenantId,
     conversationContext,
+    selectedModel
   );
   console.log("========== DOCUMENT ROUTING ==========");
   console.log("Question:", question);

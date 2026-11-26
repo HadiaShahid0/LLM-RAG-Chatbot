@@ -20,7 +20,16 @@ export const initializeHybridSearchService = async () => {
         with_payload: true,
         with_vector: false,
       });
-
+      console.log(
+        "Stored Semantic Cache Points:",
+        points.points.map((point) => ({
+          question: point.payload.question,
+          userId: point.payload.userId,
+          tenantId: point.payload.tenantId,
+          model: point.payload.model,
+          expiresAt: point.payload.expiresAt,
+        })),
+      );
       storedDocuments.points.forEach((point) => {
         const { text, ...metadata } = point.payload || {};
 
