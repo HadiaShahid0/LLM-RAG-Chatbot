@@ -14,13 +14,21 @@ import { createLangChainTools } from "../tools/langchainTools.js";
 import { convertMessages } from "../services/langchainServices.js";
 import { formatCitationsService } from "../services/citationsService.js";
 import { retrieveDocumentContextService } from "../services/documentServices.js";
+
 const models = { gemini: geminiModel, groq: groqModel };
 
-const groqToolResponse = async (
-  selectedModel,
-  messages,
-  shouldSearchDocuments,
-) => {
+const checkToolUsage = (message = []) => {
+  return message.some((message) => {
+    const messageType = message._getType?.();
+    return (
+      messageType === "tool" ||
+      message.tool_calls?.length > 0 ||
+      message.additional_kwargs?.tool_calls?.length > 0
+    );
+  });
+};
+
+const groqToolResponse = async (model, messages, shouldSearchDocuments) => {
   const convertedMessages = messages.map((message) => {
     const type = message._getType();
 
@@ -53,7 +61,16 @@ const groqToolResponse = async (
     temperature: 0.7,
   });
 
-  return response.choices[0].message.content;
+  const finalMessage = response.choices[0].message;
+
+  const groqUsedTools =
+    Array.isArray(finalMessage.executed_tools) &&
+    finalMessage.executed_tools.length > 0;
+
+  return {
+    content: finalMessage.content || "",
+    usedTools: shouldSearchDocuments || groqUsedTools,
+  };
 };
 
 export const generateGeminiResponseWithTools = async (
@@ -63,7 +80,7 @@ export const generateGeminiResponseWithTools = async (
   tenantId,
 ) => {
   if (!userId) throw new Error("User Id is required");
-  if(!tenantId) throw new Error("Tenant Id is required")
+  if (!tenantId) throw new Error("Tenant Id is required");
 
   const convertedMessages = convertMessages(messages);
 
@@ -72,30 +89,33 @@ export const generateGeminiResponseWithTools = async (
     .find((message) => message._getType() === "human");
 
   const question = Array.isArray(lastUserMessage?.content)
-  ? lastUserMessage.content
-      .map((item) => item.text || "")
-      .join("\n")
-  : lastUserMessage?.content || "";
+    ? lastUserMessage.content.map((item) => item.text || "").join("\n")
+    : lastUserMessage?.content || "";
 
   const conversationContext = convertedMessages
     .slice(-6)
     .map((message) => `${message._getType()}: ${message.content}`)
     .join("\n");
 
+  const start = Date.now();
+
   const documentContext = await retrieveDocumentContextService(
     question,
     userId,
     tenantId,
     conversationContext,
+    selectedModel,
   );
+
+  console.log("Document retrieval:", Date.now() - start, "ms");
 
   const shouldSearchDocuments = documentContext?.shouldSearchDocuments ?? false;
 
   const documentResults = documentContext?.results ?? [];
 
-const documentMessage = shouldSearchDocuments
-  ? new SystemMessage({
-      content: `
+  const documentMessage = shouldSearchDocuments
+    ? new SystemMessage({
+        content: `
 DOCUMENT CONTEXT:
 
 The following information was retrieved from the user's authorized documents.
@@ -111,8 +131,8 @@ STRICT INSTRUCTIONS:
 5. When the user asks whether an answer came from a document, check the actual source information.
 6. Mention the source document's filename when available.
 `,
-    })
-  : null;
+      })
+    : null;
 
   const messagesWithDocuments = documentMessage
     ? [documentMessage, ...convertedMessages]
@@ -136,15 +156,30 @@ STRICT INSTRUCTIONS:
     systemPrompt,
   });
 
+  const agentStart = Date.now();
+
   const response = await agent.invoke({
     messages: messagesWithDocuments,
   });
+
+  console.log("Agent execution:", Date.now() - agentStart, "ms");
 
   const finalMessage = response.messages[response.messages.length - 1];
 
   const answer = finalMessage.content;
 
+  const answerText =
+    typeof answer === "string"
+      ? answer
+      : Array.isArray(answer)
+        ? answer.map((item) => item.text || "").join("\n")
+        : String(answer ?? "");
+
   const citationText = formatCitationsService(citations);
 
-  return answer + citationText;
+  const agentUsedTools = checkToolUsage(response.messages);
+
+  const usedTools =
+    shouldSearchDocuments || agentUsedTools || citations.length > 0;
+  return { content: answerText + citationText, usedTools };
 };

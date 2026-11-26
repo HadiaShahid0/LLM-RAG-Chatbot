@@ -19,38 +19,56 @@ import { uploadFileToGemini } from "./geminiServices.js";
 import { generateGeminiResponseWithTools } from "../agents/langchainAgent.js";
 import { getRelevantDocumentChunksService } from "../tools/toolService.js";
 import supabase, { BUCKET_NAME } from "../config/supabase.js";
+import {
+  generateCacheKey,
+  getCachedResponse,
+  saveCachedResponse,
+} from "../cacheServices/exactMatchCacheService.js";
 
-const generateConversationTitle = async (
-  content,
-  selectedModel,
-  userId,
-  tenantId,
-) => {
-  const response = await generateGeminiResponseWithTools(
-    [
-      {
-        role: "user",
-        parts: [
-          {
-            text: `Generate a short title (2-5 words) for this conversation.
+import {
+  getSemanticCachedResponse,
+  saveSemanticCacheService,
+} from "../cacheServices/semanticCacheService.js";
 
-Rules:
-- Identify the main topic.
-- Do not copy the entire question.
-- Do not include quotation marks.
-- Return only the title.
+import { groqModel, model as geminiModel } from "../config/langchain.js";
+const canUseSemanticCache = async ({
+  userMessage,
+  existingAssistantMessage,
+  bypassCache,
+}) => {
+  if (bypassCache || existingAssistantMessage) return false;
 
-User message: ${content}`,
-          },
-        ],
-      },
-    ],
-    selectedModel,
-    userId,
-    tenantId,
-  );
+  if (!userMessage.content?.trim()) return false;
 
-  return response
+  if (userMessage.filePath || userMessage.geminiFileUri) return false;
+
+  const followUpPatterns =
+    /\b(it|its|they|them|this|that|these|those|their|above|previous)\b|what about|tell me more|explain more|explain again|repeat that|why is that|how about/i;
+  return !followUpPatterns.test(userMessage.content);
+};
+
+const isCacheSafeQuestion = (question) => {
+  const unsafePatterns =
+    /\b(latest|current|today|tomorrow|yesterday|now|recent|news|weather|search|look up|browse|internet|website|url|link|price|stock|exchange rate|uploaded|document|pdf|file|according to my document)\b/i;
+
+  return !unsafePatterns.test(question || "");
+};
+
+const generateConversationTitle = async (content, selectedModel) => {
+  const prompt = `
+Generate a short title (2-5 words) for this conversation.
+
+Return only the title.
+
+User message: ${content}
+`;
+
+  const response =
+    selectedModel === "groq"
+      ? await groqModel.invoke(prompt)
+      : await geminiModel.invoke(prompt);
+
+  return String(response.content)
     .trim()
     .replace(/^["']|["']$/g, "")
     .slice(0, 50);
@@ -129,6 +147,7 @@ const generateAndSaveAssistantMessageService = async (
   selectedModel,
   res,
   existingAssistantMessage = null,
+  bypassCache = false,
 ) => {
   const beforeMessageId = existingAssistantMessage ? userMessage.id : null;
 
@@ -197,18 +216,121 @@ const generateAndSaveAssistantMessageService = async (
   if (conversationContext.length === 0)
     throw new Error("Conversation context is empty");
 
-  const aiResponseText = await generateGeminiResponseWithTools(
-    conversationContext,
-    selectedModel,
+  const cacheKey = generateCacheKey({
     userId,
     tenantId,
-  );
+    model: selectedModel,
+    question: userMessage.content.trim().toLowerCase(),
+    version: "v2",
+  });
+
+  const cacheSafeQuestion = isCacheSafeQuestion(userMessage.content);
+
+  const isCacheable =
+    !bypassCache &&
+    !existingAssistantMessage &&
+    !userMessage.filePath &&
+    !userMessage.geminiFileUri &&
+    cacheSafeQuestion;
+
+  const isSemanticCacheable =
+    isCacheable &&
+    (await canUseSemanticCache({
+      userMessage,
+      existingAssistantMessage,
+      bypassCache,
+    }));
+
+  console.log("========== CACHE ELIGIBILITY ==========");
+  console.log("Exact Cache Eligible:", isCacheable);
+  console.log("Semantic Cache Eligible:", isSemanticCacheable);
+
+  let aiResponseText;
+  let cacheHit = false;
+  let usedTools = false;
+  let usedToolNames = [];
+
+  if (isCacheable) {
+    const cacheStart = Date.now();
+
+    const cachedResponse = await getCachedResponse(cacheKey);
+
+    console.log("Exact cache lookup:", Date.now() - cacheStart, "ms");
+
+    if (cachedResponse) {
+      const cacheData = JSON.parse(cachedResponse);
+
+      aiResponseText = cacheData.content;
+      cacheHit = true;
+
+      console.log("Exact LLM Cache HIT");
+    } else {
+      console.log("Exact LLM Cache MISS");
+    }
+  }
+
+  if (!cacheHit && isSemanticCacheable) {
+    const cacheStart = Date.now();
+
+    const semanticCachedResponse = await getSemanticCachedResponse({
+      question: userMessage.content,
+      userId,
+      tenantId,
+      model: selectedModel,
+    });
+
+    console.log("Semantic cache lookup:", Date.now() - cacheStart, "ms");
+
+    if (semanticCachedResponse) {
+      aiResponseText = semanticCachedResponse;
+      cacheHit = true;
+      console.log("Semantic Cache HIT");
+    } else {
+      console.log("Semantic LLM Cache Miss");
+    }
+  }
+
+  if (!cacheHit) {
+    const agentResponse = await generateGeminiResponseWithTools(
+      conversationContext,
+      selectedModel,
+      userId,
+      tenantId,
+    );
+    aiResponseText = agentResponse?.content || "";
+    usedTools = agentResponse?.usedTools ?? true;
+    console.log("Tools used: ", usedTools);
+    console.log("Tool Names:", usedToolNames);
+  }
 
   const assistantContent = await streamGeminiResponseService(
     aiResponseText,
     res,
   );
 
+  if (!cacheHit && !usedTools && assistantContent) {
+    if (isCacheable) {
+      await saveCachedResponse(cacheKey, {
+        content: assistantContent,
+      });
+
+      console.log("Exact LLM Response SAVED");
+    }
+
+    if (isSemanticCacheable) {
+      await saveSemanticCacheService({
+        question: userMessage.content,
+        response: assistantContent,
+        userId,
+        tenantId,
+        model: selectedModel,
+      });
+
+      console.log("Semantic LLM Response SAVED");
+    }
+  } else if (!cacheHit && usedTools) {
+    console.log("LLM Response NOT CACHED: Tools were used");
+  }
   if (existingAssistantMessage) {
     const previousVersions =
       existingAssistantMessage.versions?.length > 0
@@ -252,9 +374,7 @@ export const createMessageService = async (
     },
   });
 
-  if (!conversation) {
-    throw new Error("Conversation not found.");
-  }
+  if (!conversation) throw new Error("Conversation not found.");
 
   const messageCount = await Message.count({
     where: {
@@ -264,12 +384,7 @@ export const createMessageService = async (
   });
 
   if (messageCount === 0 && content?.trim()) {
-    const title = await generateConversationTitle(
-      content,
-      selectedModel,
-      userId,
-      tenantId,
-    );
+    const title = await generateConversationTitle(content, selectedModel);
 
     await conversation.update({ title });
   }
@@ -293,8 +408,7 @@ export const createMessageService = async (
         upsert: false,
       });
 
-    if (error)
-      throw new Error(`Supabase upload failed: ${error.message}`);
+    if (error) throw new Error(`Supabase upload failed: ${error.message}`);
   }
 
   try {
@@ -410,8 +524,10 @@ export const regenerateMessageService = async ({
     selectedModel,
     res,
     assistantMessage,
+    true,
   );
 };
+
 export const getMessagesByConversationIdService = async (
   conversationId,
   userId,

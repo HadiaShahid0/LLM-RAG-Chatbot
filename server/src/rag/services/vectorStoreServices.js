@@ -2,6 +2,8 @@ import { QdrantClient } from "@qdrant/js-client-rest";
 
 export const COLLECTION_NAME = "chatDocuments";
 
+export const SEMANTIC_CACHE_COLLECTION = "semanticResponseCache";
+
 if (!process.env.QDRANT_URL || !process.env.QDRANT_API_KEY) {
   throw new Error("Qdrant environment variables are missing");
 }
@@ -12,11 +14,11 @@ const qdrant = new QdrantClient({
 });
 
 let documentCollection = null;
+let semanticCacheInitialized = false;
+let semanticCacheInitPromise = null;
 
 export const getDocumentCollectionService = async () => {
-  if (documentCollection) {
-    return documentCollection;
-  }
+  if (documentCollection) return documentCollection;
 
   const collections = await qdrant.getCollections();
 
@@ -35,7 +37,6 @@ export const getDocumentCollectionService = async () => {
     console.log("Qdrant collection created successfully.");
   }
 
-  // Create payload indexes for filtered fields
   const indexFields = ["userId", "tenantId", "documentId", "scope"];
 
   for (const field of indexFields) {
@@ -51,6 +52,55 @@ export const getDocumentCollectionService = async () => {
   documentCollection = qdrant;
 
   return documentCollection;
+};
+
+export const getSemanticCacheCollectionService = async () => {
+  if (semanticCacheInitialized) return qdrant;
+
+  if (!semanticCacheInitPromise) {
+    semanticCacheInitPromise = (async () => {
+      const collections = await qdrant.getCollections();
+
+      const collectionExists = collections.collections.some(
+        (collection) => collection.name === SEMANTIC_CACHE_COLLECTION,
+      );
+
+      if (!collectionExists) {
+        await qdrant.createCollection(SEMANTIC_CACHE_COLLECTION, {
+          vectors: {
+            size: 3072,
+            distance: "Cosine",
+          },
+        });
+
+        console.log("Semantic cache collection created");
+      }
+
+      const indexFields = [
+        { field_name: "userId", field_schema: "keyword" },
+        { field_name: "tenantId", field_schema: "keyword" },
+        { field_name: "model", field_schema: "keyword" },
+        { field_name: "expiresAt", field_schema: "integer" },
+      ];
+
+      for (const field of indexFields) {
+        await qdrant.createPayloadIndex(SEMANTIC_CACHE_COLLECTION, {
+          ...field,
+          wait: true,
+        });
+      }
+
+      semanticCacheInitialized = true;
+
+      console.log("Semantic cache collection initialized");
+
+      return qdrant;
+    })().catch((error) => {
+      semanticCacheInitPromise = null;
+      throw error;
+    });
+  }
+  return await semanticCacheInitPromise;
 };
 
 export const checkQdrantConnection = async () => {

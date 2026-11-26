@@ -1,24 +1,30 @@
-export const validateInvitationService = async (token) => {
-  console.log("Validating invitation...");
-  console.log("Token received:", Boolean(token));
-  console.log("Token length:", token?.length);
+import redis from "../config/redis.js";
+import crypto from "crypto";
 
-  const tokenHash = crypto
+export const generateCacheKey = (data) => {
+  const hash = crypto
     .createHash("sha256")
-    .update(token)
+    .update(JSON.stringify(data))
     .digest("hex");
 
-  console.log("Token hash generated:", Boolean(tokenHash));
+  return `llm:${hash}`;
+};
 
-  const invitation = await Invitation.findOne({
-    where: { tokenHash },
-  });
-
-  console.log("Invitation found:", Boolean(invitation));
-
-  if (!invitation) {
-    throw new Error("Invalid invitation link");
+export const getCachedResponse = async (key) => {
+  try {
+    return await redis.get(key);
+  } catch (error) {
+    console.error("Cache retrieval failed:", error);
+    return null;
   }
+};
 
-  // Keep your remaining validation logic.
+export const saveCachedResponse = async (key, response) => {
+  try {
+    await redis.set(key, JSON.stringify(response), {
+      EX: 3600,
+    });
+  } catch (error) {
+    console.error("Cache saving failed:", error);
+  }
 };
