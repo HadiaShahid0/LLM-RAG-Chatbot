@@ -14,9 +14,9 @@ import {
   COLLECTION_NAME,
 } from "./vectorStoreServices.js";
 
-const generateChunkId = (documentId, index) => {
+const generateChunkId = (tenantId, documentId, index) => {
   const hash = createHash("sha256")
-    .update(`${documentId}-${index}`)
+    .update(`${tenantId}-${documentId}-${index}`)
     .digest("hex");
 
   return [
@@ -26,6 +26,47 @@ const generateChunkId = (documentId, index) => {
     `a${hash.slice(17, 20)}`,
     hash.slice(20, 32),
   ].join("-");
+};
+
+const getExistingChunkIds = async (collection, documentId, tenantId) => {
+  const existingIds = [];
+  let offset;
+
+  while (true) {
+    const result = await collection.scroll(COLLECTION_NAME, {
+      filter: {
+        must: [
+          {
+            key: "documentId",
+            match: {
+              value: String(documentId),
+            },
+          },
+          {
+            key: "tenantId",
+            match: {
+              value: String(tenantId),
+            },
+          },
+        ],
+      },
+
+      limit: 1000,
+      offset,
+      with_payload: false,
+      with_vector: false,
+    });
+
+    existingIds.push(...result.points.map((point) => point.id));
+
+    if (!result.next_page_offset) {
+      break;
+    }
+
+    offset = result.next_page_offset;
+  }
+
+  return existingIds;
 };
 
 export const storePDFInQdrantService = async ({
@@ -67,7 +108,7 @@ export const storePDFInQdrantService = async ({
 
     const embedding = await generateDocumentEmbeddingService(
       chunks[i].pageContent,
-      tenantId
+      tenantId,
     );
 
     embeddings.push(embedding);
@@ -76,7 +117,7 @@ export const storePDFInQdrantService = async ({
   const collection = await getDocumentCollectionService();
 
   const points = chunks.map((chunk, index) => ({
-    id: generateChunkId(documentId, index),
+    id: generateChunkId(tenantId, documentId, index),
 
     vector: embeddings[index],
 
@@ -92,42 +133,20 @@ export const storePDFInQdrantService = async ({
     },
   }));
 
-  // Retrieve existing chunks for this document
-  const existingData = await collection.scroll(COLLECTION_NAME, {
-    filter: {
-      must: [
-        {
-          key: "documentId",
-          match: {
-            value: String(documentId),
-          },
-        },
-        {
-          key: "tenantId",
-          match: {
-            value: String(tenantId),
-          },
-        },
-      ],
-    },
+  const existingIds = await getExistingChunkIds(
+    collection,
+    documentId,
+    tenantId,
+  );
 
-    limit: 10000,
-    with_payload: false,
-    with_vector: false,
-  });
-
-  // Store new chunks
   await collection.upsert(COLLECTION_NAME, {
     points,
     wait: true,
   });
 
-  // Delete obsolete chunks
   const newIds = new Set(points.map((point) => point.id));
 
-  const obsoleteIds = existingData.points
-    .map((point) => point.id)
-    .filter((id) => !newIds.has(id));
+  const obsoleteIds = existingIds.filter((id) => !newIds.has(id));
 
   if (obsoleteIds.length > 0) {
     await collection.delete(COLLECTION_NAME, {
