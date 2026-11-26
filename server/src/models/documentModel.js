@@ -49,8 +49,8 @@ const Document = Sequelize.define(
       defaultValue: "private",
     },
     status: {
-      type: DataTypes.ENUM("processing", "completed", "failed"),
-      defaultValue: "processing",
+      type: DataTypes.ENUM("pending", "processing", "completed", "failed"),
+      defaultValue: "pending",
       allowNull: false,
     },
   },

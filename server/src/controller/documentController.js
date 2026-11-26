@@ -5,6 +5,7 @@ import {
   getDocumentsService,
   processDocumentService,
   deleteDocumentService,
+  uploadDocumentService,
 } from "../services/documentServices.js";
 import { randomUUID } from "crypto";
 import supabase, { BUCKET_NAME } from "../config/supabase.js";
@@ -25,43 +26,15 @@ export const getDocumentsController = async (req, res) => {
 };
 
 export const uploadDocumentController = async (req, res) => {
-  let storagePath;
-  let document;
-
   try {
     if (!req.file) {
       return res.status(400).json({
         success: false,
-        error: "Please select a PDF file",
+        error: "Please Select a PDF File",
       });
     }
 
-    const membership = await TenantMember.findOne({
-      where: {
-        userId: req.user.id,
-        tenantId: req.tenant.id,
-        status: "active",
-      },
-    });
-
-    if (!membership) {
-      return res.status(403).json({
-        success: false,
-        error: "You are not authorized to upload documents",
-      });
-    }
-
-    const visibility = req.body.visibility || "private";
-    const allowedVisibility = ["private", "employee", "admin", "selected"];
-
-    if (!allowedVisibility.includes(visibility)) {
-      return res.status(400).json({
-        success: false,
-        error: "Invalid document visibility",
-      });
-    }
     let permissions = [];
-
     try {
       permissions = req.body.permissions
         ? JSON.parse(req.body.permissions)
@@ -73,109 +46,24 @@ export const uploadDocumentController = async (req, res) => {
       });
     }
 
-    if (!Array.isArray(permissions)) {
-      return res.status(400).json({
-        success: false,
-        error: "Permissions must be an array",
-      });
-    }
-
-    if (visibility === "selected") {
-      if (!permissions.length) {
-        return res.status(400).json({
-          success: false,
-          error: "Please select at least one employee",
-        });
-      }
-      const userIds = permissions.map(Number);
-
-      if (
-        userIds.some((id) => !Number.isInteger(id) || id <= 0) ||
-        new Set(userIds).size !== userIds.length
-      ) {
-        return res.status(400).json({
-          success: false,
-          error: "Invalid or duplicate employee IDs",
-        });
-      }
-
-      const members = await TenantMember.findAll({
-        where: {
-          tenantId: req.tenant.id,
-          userId: userIds,
-          role: "employee",
-          status: "active",
-        },
-      });
-
-      if (members.length !== userIds.length) {
-        return res.status(400).json({
-          success: false,
-          error: "One or more selected employees are invalid",
-        });
-      }
-      permissions = userIds;
-    }
-
-    storagePath = `${req.tenant.id}/${req.user.id}/${randomUUID()}.pdf`;
-
-    const { error: uploadError } = await supabase.storage
-      .from(BUCKET_NAME)
-      .upload(storagePath, req.file.buffer, {
-        contentType: "application/pdf",
-        upsert: false,
-      });
-
-    if (uploadError) throw uploadError;
-
-    document = await Document.create({
-      tenantId: req.tenant.id,
+    const document = await uploadDocumentService({
+      file: req.file,
       userId: req.user.id,
-      fileName: req.file.originalname,
-      filePath: storagePath,
-      fileSize: req.file.size,
-      visibility,
-      status: "processing",
+      tenantId: req.tenant.id,
+      visibility: req.body.visibility || "private",
+      permissions,
     });
 
-    if (visibility === "selected") {
-      await DocumentPermission.bulkCreate(
-        permissions.map((selectedUserId) => ({
-          documentId: document.id,
-          userId: selectedUserId,
-          grantedBy: req.user.id,
-        })),
-      );
-    }
-
-    processDocumentService(document.id, req.tenant.id).catch((error) => {
-      console.error("Background document processing error:", error);
-    });
-
-    return res.status(201).json({
+    return res.status(202).json({
       success: true,
-      message: "Document uploaded successfully",
+      message:
+        "Document uploaded successfully. Processing has been added to the queue.",
       document,
     });
   } catch (error) {
-    console.error("Document upload failed:", error);
+    console.error("Document upload controller error:", error);
 
-    if (document) {
-      await DocumentPermission.destroy({
-        where: { documentId: document.id },
-      }).catch(console.error);
-
-      await document.destroy().catch(console.error);
-    }
-
-    if (storagePath) {
-      await supabase.storage
-        .from(BUCKET_NAME)
-        .remove([storagePath])
-        .catch(console.error);
-    }
-
-    return res.status(500).json({
+    return res.status(error.statusCode || 500).json({
       success: false,
       error: error.message || "Failed to upload document",
     });

@@ -1,5 +1,12 @@
 import Document from "../models/documentModel.js";
+
+import DocumentPermission from "../models/documentPermissionModel.js";
+
+import TenantMember from "../models/tenantMemberModel.js";
+
 import { Op } from "sequelize";
+import { randomUUID } from "crypto";
+
 import { storePDFInQdrantService } from "../rag/services/documentServices.js";
 import {
   getDocumentCollectionService,
@@ -11,9 +18,136 @@ import { model } from "../config/langchain.js";
 import { searchDocuments } from "../tools/toolRegistoery.js";
 import { getAuthorizedDocumentIdsService } from "./documentPermissionService.js";
 import supabase, { BUCKET_NAME } from "../config/supabase.js";
-import TenantMember from "../models/tenantMemberModel.js";
 import { model as geminiModel, groqModel } from "../config/langchain.js";
 
+import { pdfQueue } from "../queues/pdfQueues.js";
+
+const createError = (message, statusCode = 400) => {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+};
+
+export const uploadDocumentService = async ({
+  file,
+  userId,
+  tenantId,
+  visibility = "private",
+  permissions = [],
+}) => {
+  let storagePath, document;
+
+  try {
+    if (!file) throw createError("Please select a pdf file");
+
+    const membership = await TenantMember.findOne({
+      where: {
+        userId,
+        tenantId,
+        status: "active",
+      },
+    });
+
+    if (!membership)
+      throw createError("You are not authorized to upload documents", 403);
+
+    const allowedVisibility = ["private", "employee", "admin", "selected"];
+
+    if (!allowedVisibility.includes(visibility))
+      throw createError("Invalid document visibility");
+
+    if (visibility === "selected") {
+      if (!permissions.length)
+        throw createError("Please select atleast one employee");
+
+      const userIds = permissions.map(Number);
+
+      if (
+        userIds.some((id) => !Number.isInteger(id) || id <= 0) ||
+        new Set(userIds).size !== userIds.length
+      )
+        throw createError("Invalid or duplicate employee IDs");
+
+      const members = await TenantMember.findAll({
+        where: {
+          tenantId,
+          userId: userIds,
+          role: "employee",
+          status: "active",
+        },
+      });
+
+      if (members.length !== userIds.length)
+        throw createError("One or more selected employees are invalid");
+      permissions = userIds;
+    }
+
+    storagePath = `${tenantId}/${userId}/${randomUUID()}.pdf`;
+
+    const { error: uploadError } = await supabase.storage
+      .from(BUCKET_NAME)
+      .upload(storagePath, file.buffer, {
+        contentType: "application/pdf",
+        upsert: false,
+      });
+
+    if (uploadError) throw uploadError;
+
+    document = await Document.create({
+      tenantId,
+      userId,
+      fileName: file.originalname,
+      filePath: storagePath,
+      fileSize: file.size,
+      visibility,
+      status: "pending",
+    });
+
+    if (visibility === "selected") {
+      await DocumentPermission.bulkCreate(
+        permissions.map((selectedUserId) => ({
+          documentId: document.id,
+          userId: selectedUserId,
+          grantedBy: userId,
+        })),
+      );
+    }
+
+    await pdfQueue.add(
+      "process-pdf",
+      {
+        documentId: document.id,
+        userId,
+        tenantId,
+      },
+      {
+        jobId: `document-${document.id}`,
+      },
+    );
+    return document;
+  } catch (error) {
+    console.log("Document upload service error:", error);
+
+    if (document) {
+      await DocumentPermission.destroy({
+        where: { documentId: document.id },
+      }).catch((cleanupError) => {
+        console.error("Permission cleanup failed:", cleanupError.message);
+      });
+    }
+    if (storagePath) {
+      const { error: removeError } = await supabase.storage
+        .from(BUCKET_NAME)
+        .remove([storagePath]);
+
+      if (removeError) {
+        console.error("Supabase file cleanup failed:", removeError.message);
+      }
+    }
+
+    throw error;
+  }
+};
 export const getDocumentsService = async (userId, tenantId) => {
   const allowedDocumentIds = await getAuthorizedDocumentIdsService(
     userId,
@@ -47,19 +181,39 @@ export const getDocumentsService = async (userId, tenantId) => {
   }));
 };
 
-export const processDocumentService = async (documentId, tenantId) => {
-  const document = await Document.findOne({
-    where: {
-      id: documentId,
-      tenantId,
-    },
-  });
-
-  if (!document) throw new Error("Document not found");
+export const processDocumentService = async ({
+  documentId,
+  tenantId,
+  userId,
+}) => {
+  let document;
 
   try {
+    console.log("PDF processing service received:", {
+      documentId,
+      tenantId,
+      userId,
+    });
+
+    if (!documentId || !tenantId || !userId) {
+      throw new Error("Missing documentId, tenantId, or userId");
+    }
+
+    document = await Document.findOne({
+      where: {
+        id: documentId,
+        tenantId,
+        userId,
+      },
+    });
+
+    if (!document) {
+      throw new Error("Document not found");
+    }
+
     await document.update({ status: "processing" });
 
+    // Download PDF from Supabase
     const { data, error } = await supabase.storage
       .from(BUCKET_NAME)
       .download(document.filePath);
@@ -68,14 +222,21 @@ export const processDocumentService = async (documentId, tenantId) => {
 
     const fileBuffer = Buffer.from(await data.arrayBuffer());
 
+    // Extract PDF text
     const extractedDocuments = await extractTextFromPDFService(fileBuffer);
 
+    // Clean extracted text
     const cleanedDocuments = cleanPDFTextService(extractedDocuments);
 
     const fullText = cleanedDocuments
       .map((item) => item.pageContent)
       .join("\n");
 
+    if (!fullText.trim()) {
+      throw new Error("No readable PDF text found");
+    }
+
+    // Generate summary and topics
     const metadata = await generateDocumentMetadataService(fullText);
 
     await document.update({
@@ -83,6 +244,7 @@ export const processDocumentService = async (documentId, tenantId) => {
       topics: metadata.topics,
     });
 
+    // Store PDF chunks and embeddings in Qdrant
     await storePDFInQdrantService({
       extractedDocuments,
       documentId: document.id,
@@ -91,13 +253,21 @@ export const processDocumentService = async (documentId, tenantId) => {
       userId: document.userId,
     });
 
-    await document.update({ status: "completed" });
+    // Mark document as completed
+    await document.update({
+      status: "completed",
+    });
 
     console.log("Document processing completed:", documentId);
+    console.log("Final document status:", document.status);
+
+    return {
+      success: true,
+      documentId,
+      status: document.status,
+    };
   } catch (error) {
     console.error("PDF processing failed:", error);
-
-    await document.update({ status: "failed" });
 
     throw error;
   }
@@ -159,6 +329,9 @@ export const deleteDocumentService = async (documentId, userId, tenantId) => {
 };
 
 export const generateDocumentMetadataService = async (text) => {
+  if (!text?.trim())
+    throw new Error("Document text is required for metadata generation");
+
   const prompt = `
         Analyze the following PDF content.
 
@@ -184,12 +357,25 @@ ${text.slice(0, 15000)}
       ? response.content
       : JSON.stringify(response.content);
 
-  const cleanedContent = content
-    .replace(/```/gi, "")
-    .replace(/```/g, "")
-    .trim();
+  const cleanedContent = content.trim();
 
-  return JSON.parse(cleanedContent);
+  const startIndex = cleanedContent.indexOf("{");
+  const endIndex = cleanedContent.lastIndexOf("}");
+
+  if (startIndex === -1 || endIndex === -1)
+    throw new Error("Invalid JSON response from metadata generation");
+
+  const jsonContent = cleanedContent.slice(startIndex, endIndex + 1);
+
+  const metadata = JSON.parse(jsonContent);
+
+  if (typeof metadata.summary !== "string" || !Array.isArray(metadata.topics))
+    throw new Error("Invalid document metadata format");
+
+  return {
+    summary: metadata.summary,
+    topics: metadata.topics,
+  };
 };
 
 export const getDocumentCatalogService = async (userId, tenantId) => {
@@ -329,7 +515,7 @@ export const retrieveDocumentContextService = async (
   userId,
   tenantId,
   conversationContext = "",
-  selectedModel="gemini"
+  selectedModel = "gemini",
 ) => {
   if (!userId || !tenantId)
     throw new Error("User Id and TenantId are required");
@@ -339,7 +525,7 @@ export const retrieveDocumentContextService = async (
     userId,
     tenantId,
     conversationContext,
-    selectedModel
+    selectedModel,
   );
   console.log("========== DOCUMENT ROUTING ==========");
   console.log("Question:", question);

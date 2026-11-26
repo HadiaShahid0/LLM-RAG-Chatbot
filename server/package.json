@@ -6,7 +6,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node src/index.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "worker": "node src/workers/pdfWorker.js"
   },
   "keywords": [],
   "author": "",
@@ -25,6 +26,7 @@
     "@qdrant/js-client-rest": "^1.20.0",
     "@supabase/server": "^1.9.2",
     "bcryptjs": "^3.0.3",
+    "bullmq": "^6.7.10",
     "chromadb": "^3.5.0",
     "cookie": "^2.0.1",
     "cookie-parser": "^1.4.7",
@@ -32,6 +34,7 @@
     "dotenv": "^16.6.1",
     "express": "^5.2.1",
     "groq-sdk": "^1.6.0",
+    "ioredis": "^5.11.1",
     "jsonwebtoken": "^9.0.3",
     "langchain": "^1.6.4",
     "multer": "^2.4.0",
